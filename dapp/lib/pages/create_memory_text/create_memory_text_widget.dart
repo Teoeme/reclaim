@@ -3,10 +3,16 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:ui';
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '/backend/api_requests/api_calls.dart';
+import '/flutter_flow/custom_functions.dart';
+import '/config/starknet_config.dart';
+import 'package:starknet_provider/starknet_provider.dart';
+import 'package:starknet/starknet.dart' show Felt;
 import 'create_memory_text_model.dart';
 export 'create_memory_text_model.dart';
 
@@ -22,6 +28,9 @@ class CreateMemoryTextWidget extends StatefulWidget {
 
 class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
   late CreateMemoryTextModel _model;
+  String _unlockType = 'timestamp'; // 'timestamp' o 'heris'
+  int _heirsCount = 0;
+  int _minConsensus = 0;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -45,6 +54,126 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _uploadToIPFS() async {
+    try {
+      final secretText = _model.secretTextTextController.text;
+      if (secretText.isEmpty) {
+        throw Exception('Secret text is required');
+      }
+
+      // Convertir el texto a base64
+      final base64Text = base64Encode(utf8.encode(secretText));
+
+      // Llamar a la API de IPFS
+      final response = await IPFSUploaderCall.call(
+        base64File: base64Text,
+      );
+
+      if (!response.succeeded) {
+        throw Exception('Failed to upload to IPFS');
+      }
+
+      print('✅ Upload successful');
+      print('📝 IPFS CID: ${IPFSUploaderCall.ipfsCID(response.jsonBody)}');
+      print('🔑 File Secret: ${IPFSUploaderCall.fileSecret(response.jsonBody)}');
+      print('🔒 Hash Commit: ${IPFSUploaderCall.hashCommit(response.jsonBody)}');
+      print('🔒 Secret: ${IPFSUploaderCall.secret(response.jsonBody)}');
+
+      if (_unlockType == 'timestamp') {
+        await _handleTimestampUnlock(response);
+      } else {
+        // TODO: Manejar el caso de herederos
+      }
+    } catch (e) {
+      print('❌ Error uploading to IPFS: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleTimestampUnlock(ApiCallResponse ipfsResponse) async {
+    try {
+      // 1. Obtener el provider con la cuenta del usuario
+      final provider = await StarknetConfig.getProviderWithAccount();
+      
+      // 2. Obtener la wallet del usuario para la public key
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Usuario no autenticado');
+      }
+
+      final walletResult = await CreateOGetWalletCall.call(
+        firebaseUserUuid: user.uid,
+      );
+
+      if (!walletResult.succeeded) {
+        throw Exception('No se pudo obtener la wallet del usuario');
+      }
+
+      final publicKey = CreateOGetWalletCall.publicKey(walletResult.jsonBody);
+      if (publicKey == null) {
+        throw Exception('No se pudo obtener la public key');
+      }
+
+      // 3. Cifrar el secret con la public key
+      final secret = IPFSUploaderCall.secret(ipfsResponse.jsonBody);
+      if (secret == null) {
+        throw Exception('No se pudo obtener el secret de IPFS');
+      }
+
+      final encryptedSecret = encryptWithRSA(secret, publicKey);
+      print('🔐 Secret cifrado: $encryptedSecret');
+
+      // 4. Preparar los datos para el contrato
+      final cid = IPFSUploaderCall.ipfsCID(ipfsResponse.jsonBody);
+      final hashCommit = IPFSUploaderCall.hashCommit(ipfsResponse.jsonBody);
+      final memoryName = _model.memoryNameTextController.text;
+      final unlockTimestamp = _model.datePicked?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+
+      // 5. Llamar al método save_metadata del contrato
+      final result = await provider.call(
+        request: FunctionCall(
+          contractAddress: Felt.fromHexString(StarknetConfig.contractAddress),
+          entryPointSelector: Felt.fromHexString('0x1234'), // TODO: Obtener el selector correcto
+          calldata: [
+            Felt.fromString(memoryName),
+            Felt.fromString(cid),
+            Felt.fromString(hashCommit),
+            Felt.fromString(encryptedSecret),
+            Felt.fromBigInt(BigInt.from(unlockTimestamp)),
+            Felt.fromBigInt(BigInt.from(0)), // Tipo de desbloqueo: 0 para timestamp
+          ],
+        ),
+        blockId: BlockId.latest,
+      );
+
+      print('✅ Metadata guardada exitosamente');
+      print('📝 Resultado: $result');
+
+      // Mostrar mensaje de éxito
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Memory created successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // TODO: Navegar a la siguiente pantalla o cerrar esta
+    } catch (e) {
+      print('❌ Error al guardar metadata: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving metadata: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -339,9 +468,40 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
                   ),
                   Padding(
                     padding: EdgeInsets.all(10.0),
-                    child: FFButtonWidget(
-                      onPressed: () async {
-                        await showModalBottomSheet<bool>(
+                    child: Container(
+                      width: 350.0,
+                      child: DropdownButtonFormField<String>(
+                        value: _unlockType,
+                        decoration: InputDecoration(
+                          labelText: 'Unlock Type',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'timestamp',
+                            child: Text('Time-based Unlock'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'heris',
+                            child: Text('Heirs-based Unlock'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _unlockType = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  if (_unlockType == 'timestamp')
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: FFButtonWidget(
+                        onPressed: () async {
+                          await showModalBottomSheet<bool>(
                             context: context,
                             builder: (context) {
                               final _datePickedCupertinoTheme =
@@ -400,23 +560,32 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
                                   ),
                                 ),
                               );
-                            });
-                      },
-                      text: valueOrDefault<String>(
-                        _model.datePicked?.toString(),
-                        'Unlock Date',
-                      ),
-                      options: FFButtonOptions(
-                        width: 350.0,
-                        height: 40.0,
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                            16.0, 0.0, 16.0, 0.0),
-                        iconPadding:
-                            EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        textStyle:
-                            FlutterFlowTheme.of(context).bodyMedium.override(
-                                  font: GoogleFonts.inter(
+                            },
+                          );
+                        },
+                        text: valueOrDefault<String>(
+                          _model.datePicked?.toString(),
+                          'Select Unlock Date',
+                        ),
+                        options: FFButtonOptions(
+                          width: 350.0,
+                          height: 40.0,
+                          padding: EdgeInsetsDirectional.fromSTEB(
+                              16.0, 0.0, 16.0, 0.0),
+                          iconPadding:
+                              EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                          color: FlutterFlowTheme.of(context).secondaryBackground,
+                          textStyle:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontWeight,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    letterSpacing: 0.0,
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .fontWeight,
@@ -424,19 +593,57 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
                                         .bodyMedium
                                         .fontStyle,
                                   ),
-                                  letterSpacing: 0.0,
-                                  fontWeight: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .fontWeight,
-                                  fontStyle: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .fontStyle,
-                                ),
-                        elevation: 0.0,
-                        borderRadius: BorderRadius.circular(8.0),
+                          elevation: 0.0,
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
                       ),
+                    )
+                  else
+                    Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.all(10.0),
+                          child: Container(
+                            width: 350.0,
+                            child: TextFormField(
+                              decoration: InputDecoration(
+                                labelText: 'Number of Heirs',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (value) {
+                                setState(() {
+                                  _heirsCount = int.tryParse(value) ?? 0;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.all(10.0),
+                          child: Container(
+                            width: 350.0,
+                            child: TextFormField(
+                              decoration: InputDecoration(
+                                labelText: 'Minimum Consensus',
+                                helperText: 'Number of heirs required to unlock the memory',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (value) {
+                                setState(() {
+                                  _minConsensus = int.tryParse(value) ?? 0;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
                   Container(
                     width: 350.0,
                     child: TextFormField(
@@ -542,8 +749,29 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
                     padding:
                         EdgeInsetsDirectional.fromSTEB(0.0, 24.0, 0.0, 12.0),
                     child: FFButtonWidget(
-                      onPressed: () {
-                        print('Button pressed ...');
+                      onPressed: () async {
+                        if (_model.formKey.currentState?.validate() ?? false) {
+                          if (_model.memoryNameTextController.text.isEmpty ||
+                              _model.secretTextTextController.text.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Please fill all required fields'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (_unlockType == 'heris' && (_heirsCount <= 0 || _minConsensus <= 0)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Please set valid heirs count and minimum consensus'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          await _uploadToIPFS();
+                        }
                       },
                       text: 'Submit Memory',
                       icon: Icon(

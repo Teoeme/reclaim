@@ -1,6 +1,7 @@
 import 'package:starknet_provider/starknet_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '/backend/api_requests/api_calls.dart';
+import '/flutter_flow/custom_functions.dart';
 
 class StarknetConfig {
   static const String rpcUrl = 'https://starknet-sepolia.public.blastapi.io/rpc/v0_8';
@@ -78,13 +79,26 @@ class StarknetConfig {
       throw Exception('No se pudo obtener la wallet del usuario');
     }
 
-    final privateKey = CreateOGetWalletCall.encryptedPrivateKey(walletResult.jsonBody);
-    if (privateKey == null) {
+    final encryptedPrivateKey = CreateOGetWalletCall.encryptedPrivateKey(walletResult.jsonBody);
+    if (encryptedPrivateKey == null) {
       throw Exception('No se pudo obtener la private key');
     }
 
-    // TODO: Desencriptar la private key antes de usarla
-    // Por ahora usamos la key encriptada como placeholder
-    return provider;
+    try {
+      // Desencriptar la private key usando la función de custom_functions.dart
+      final decryptedPrivateKey = decryptWithRSA(
+        encryptedPrivateKey,
+        user.uid, // Usamos el UID del usuario como clave privada para la desencriptación
+      );
+
+      print('🔐 Private key desencriptada exitosamente');
+      
+      // TODO: Usar la private key desencriptada para crear la cuenta
+      // Por ahora retornamos el provider sin cuenta
+      return provider;
+    } catch (e) {
+      print('❌ Error al desencriptar la private key: $e');
+      throw Exception('Error al desencriptar la private key: $e');
+    }
   }
 } 

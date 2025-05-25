@@ -76,7 +76,6 @@ String encryptWithRSA(String plaintext, String publicKeyPem) {
   }
 }
 
-// Función auxiliar para descifrar (para uso futuro)
 String decryptWithRSA(String encryptedText, String privateKey) {
   try {
     // Decodificar de base64
@@ -90,9 +89,22 @@ String decryptWithRSA(String encryptedText, String privateKey) {
       throw Exception('Datos cifrados inválidos');
     }
     
-    final plaintextBytes = encryptedBytes.sublist(0, encryptedBytes.length - 32);
-    return utf8.decode(plaintextBytes);
+    // Convertir los bytes a hexadecimal
+    final hexString = encryptedBytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join('');
+    
+    // Extraer la parte que necesitamos (los primeros bytes sin el hash)
+    final plaintextHex = hexString.substring(0, hexString.length - 64); // 32 bytes = 64 caracteres hex
+    
+    // Convertir de hex a string
+    final plaintextBytes = List<int>.generate(
+      plaintextHex.length ~/ 2,
+      (i) => int.parse(plaintextHex.substring(i * 2, i * 2 + 2), radix: 16),
+    );
+    
+    return String.fromCharCodes(plaintextBytes);
   } catch (e) {
+    print('❌ Error en decryptWithRSA: $e');
+    print('Texto encriptado recibido: $encryptedText');
     throw Exception('Error al descifrar: $e');
   }
 }
