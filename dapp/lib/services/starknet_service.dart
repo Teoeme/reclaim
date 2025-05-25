@@ -2,8 +2,8 @@ import 'package:starknet/starknet.dart' hide Signer;
 import 'package:starknet/starknet.dart' as starknet show Signer;
 import 'package:avnu_provider/avnu_provider.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/custom_functions.dart' as functions;
 import 'package:crypto/crypto.dart';
-import 'package:encrypt/encrypt.dart';
 import 'dart:convert';
 
 class StarknetService {
@@ -32,14 +32,17 @@ class StarknetService {
     required String cid,
   }) async {
     try {
-      // Descifrar la clave privada usando el hash secret desde variables de entorno
-      final decryptedPrivateKey = await _decryptPrivateKey(encryptedPrivateKey);
-      if (decryptedPrivateKey == null) {
-        print('Error: No se pudo descifrar la clave privada');
+      // Descifrar la clave privada usando la función de custom_functions
+      final hashSecret = FFDevEnvironmentValues().HashSecret;
+      String decryptedPrivateKey;
+      
+      try {
+        decryptedPrivateKey = functions.decryptWithRSA(encryptedPrivateKey, hashSecret);
+        print('Clave privada descifrada exitosamente');
+      } catch (e) {
+        print('Error: No se pudo descifrar la clave privada: $e');
         return null;
       }
-      
-      print('Clave privada descifrada exitosamente');
       
       // Convertir timestamp a hex
       final unlockTimestampHex = '0x${(unlockTimestamp.millisecondsSinceEpoch ~/ 1000).toRadixString(16)}';
@@ -96,72 +99,7 @@ class StarknetService {
     }
   }
 
-  /// Descifrar la clave privada usando AES directamente
-  /// Implementación equivalente a: CryptoJs.AES.decrypt(encryptedSecret, pin).toString(CryptoJs.enc.Utf8)
-  Future<String?> _decryptPrivateKey(String encryptedPrivateKey) async {
-    try {
-      final pin = FFDevEnvironmentValues().HashSecret;
-      
-              // Método 1: Intentar descifrado directo con el pin como clave
-        try {
-          final key = Key.fromUtf8(pin.padRight(32, '0').substring(0, 32));
-          final iv = IV.fromLength(16); 
 
-          final encrypter = Encrypter(AES(key));
-
-          final decrypted = encrypter.decrypt64(encryptedPrivateKey, iv: iv);
-          final hex = utf8.encode(decrypted)
-              .map((b) => b.toRadixString(16).padLeft(2, '0'))
-              .join();
-
-          return '0x$hex';
-      } catch (e1) {
-        print('Método 1 falló: $e1');
-      }
-      
-      // Método 2: Usar SHA-256 del pin como clave
-      try {
-        final keyBytes = sha256.convert(utf8.encode(pin)).bytes;
-        final key = Key(Uint8List.fromList(keyBytes));
-        final aes = Encrypter(AES(key));
-        
-        final encrypted = Encrypted.fromBase64(encryptedPrivateKey);
-        final decrypted = aes.decrypt(encrypted, iv: IV.fromLength(16));
-        
-        if (decrypted.isNotEmpty) {
-          final result = decrypted.startsWith('0x') ? decrypted : '0x$decrypted';
-          print('Descifrado exitoso con método 2');
-          return result;
-        }
-      } catch (e2) {
-        print('Método 2 falló: $e2');
-      }
-      
-      // Método 3: Intentar con diferentes configuraciones de IV
-      try {
-        final keyBytes = sha256.convert(utf8.encode(pin)).bytes;
-        final key = Key(Uint8List.fromList(keyBytes));
-        final aes = Encrypter(AES(key, mode: AESMode.cbc));
-        
-        final encrypted = Encrypted.fromBase64(encryptedPrivateKey);
-        final decrypted = aes.decrypt(encrypted, iv: IV.fromSecureRandom(16));
-        
-        if (decrypted.isNotEmpty) {
-          final result = decrypted.startsWith('0x') ? decrypted : '0x$decrypted';
-          print('Descifrado exitoso con método 3');
-          return result;
-        }
-      } catch (e3) {
-        print('Método 3 falló: $e3');
-      }
-      
-      print('Todos los métodos de descifrado fallaron');
-      return null;
-    } catch (e) {
-      print('Error general en descifrado: $e');
-      return null;
-    }
-  }
 
   /// Generar firma usando la clave privada descifrada y Starknet
   Future<List<String>?> _generateSignature(

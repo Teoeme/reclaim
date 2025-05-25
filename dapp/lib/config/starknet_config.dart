@@ -2,6 +2,7 @@ import 'package:starknet_provider/starknet_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '/backend/api_requests/api_calls.dart';
 import '/flutter_flow/custom_functions.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 class StarknetConfig {
   static const String rpcUrl = 'https://starknet-sepolia.public.blastapi.io/rpc/v0_8';
@@ -86,9 +87,10 @@ class StarknetConfig {
 
     try {
       // Desencriptar la private key usando la función de custom_functions.dart
+      final hashSecret = FFDevEnvironmentValues().HashSecret;
       final decryptedPrivateKey = decryptWithRSA(
         encryptedPrivateKey,
-        user.uid, // Usamos el UID del usuario como clave privada para la desencriptación
+        hashSecret, 
       );
 
       print('🔐 Private key desencriptada exitosamente');

@@ -4,7 +4,6 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
-import '/flutter_flow/app_state.dart';
 import '/services/starknet_service.dart';
 import 'dart:ui';
 import '/flutter_flow/custom_functions.dart' as functions;
@@ -12,7 +11,6 @@ import '/auth/firebase_auth/auth_util.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'create_memory_image_model.dart';
 export 'create_memory_image_model.dart';
 
@@ -615,16 +613,42 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                         return;
                       }
                       
-                      // Obtenemos la información del wallet desde el estado global
-                      final appState = Provider.of<AppState>(context, listen: false);
+                      // Obtenemos la información del wallet desde la API
+                      ApiCallResponse? walletResponse;
+                      try {
+                        walletResponse = await CreateOGetWalletCall.call(
+                          firebaseUserUuid: currentUserUid,
+                        );
+                      } catch (e) {
+                        Navigator.pop(context); // Cerrar loading si está abierto
+                        await showDialog(
+                          context: context,
+                          builder: (alertDialogContext) {
+                            return AlertDialog(
+                              title: Text('Error de Conexión'),
+                              content: Text('No se pudo conectar con el servidor. Verifica tu conexión a internet.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(alertDialogContext),
+                                  child: Text('OK'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (_shouldSetState) safeSetState(() {});
+                        return;
+                      }
                       
-                      if (!appState.hasWalletInfo()) {
+                      if (!(walletResponse?.succeeded ?? false)) {
+                        Navigator.pop(context); // Cerrar loading si está abierto
                         await showDialog(
                           context: context,
                           builder: (alertDialogContext) {
                             return AlertDialog(
                               title: Text('Error del Sistema'),
-                              content: Text('No se ha cargado la información del wallet. Por favor, vuelve a iniciar sesión.'),
+                              content: Text('No se pudo obtener la información del wallet. Por favor, vuelve a iniciar sesión.'),
                               actions: [
                                 TextButton(
                                   onPressed: () =>
@@ -657,10 +681,34 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                       );
                       
                       try {
-                        // Obtenemos la información del wallet
-                        final userPublicKey = appState.userPublicKey!;
-                        final userPrivateKey = appState.userPrivateKey!;
-                        final userWalletAddress = appState.userWalletAddress!;
+                        // Obtenemos la información del wallet desde la respuesta de la API
+                        final userPublicKey = CreateOGetWalletCall.publicKey(walletResponse?.jsonBody);
+                        final userPrivateKey = CreateOGetWalletCall.encryptedPrivateKey(walletResponse?.jsonBody);
+                        final userWalletAddress = CreateOGetWalletCall.address(walletResponse?.jsonBody);
+                        
+                        if (userPublicKey == null || userPublicKey.isEmpty ||
+                            userPrivateKey == null || userPrivateKey.isEmpty ||
+                            userWalletAddress == null || userWalletAddress.isEmpty) {
+                          Navigator.pop(context); // Cerrar loading
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('Error del Sistema'),
+                                content: Text('Los datos del wallet están incompletos. Por favor, vuelve a iniciar sesión.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          if (_shouldSetState) safeSetState(() {});
+                          return;
+                        }
                         
                         print('userPublicKey: $userPublicKey');
                         print('userWalletAddress: $userWalletAddress');
