@@ -106,12 +106,12 @@ app.*.map.json
 /android/app/release
 
 # 🔒 SECURITY - Firebase and sensitive configurations
-lib/backend/firebase/firebase_config.dart
-android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
+**/lib/backend/firebase/firebase_config.dart
+**/android/app/google-services.json
+**/ios/Runner/GoogleService-Info.plist
 
 # 🔒 SECURITY - Environment variables and secrets
-assets/environment_values/environment.json
+**/assets/environment_values/environment.json
 .env
 .env.local
 .env.production
