@@ -9,10 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '/backend/api_requests/api_calls.dart';
-import '/flutter_flow/custom_functions.dart';
-import '/config/starknet_config.dart';
-import 'package:starknet_provider/starknet_provider.dart';
-import 'package:starknet/starknet.dart' show Felt;
 import 'create_memory_text_model.dart';
 export 'create_memory_text_model.dart';
 
@@ -79,100 +75,11 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
       print('📝 IPFS CID: ${IPFSUploaderCall.ipfsCID(response.jsonBody)}');
       print('🔑 File Secret: ${IPFSUploaderCall.fileSecret(response.jsonBody)}');
       print('🔒 Hash Commit: ${IPFSUploaderCall.hashCommit(response.jsonBody)}');
-      print('🔒 Secret: ${IPFSUploaderCall.secret(response.jsonBody)}');
 
-      if (_unlockType == 'timestamp') {
-        await _handleTimestampUnlock(response);
-      } else {
-        // TODO: Manejar el caso de herederos
-      }
+      // TODO: Manejar la respuesta exitosa
     } catch (e) {
       print('❌ Error uploading to IPFS: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleTimestampUnlock(ApiCallResponse ipfsResponse) async {
-    try {
-      // 1. Obtener el provider con la cuenta del usuario
-      final provider = await StarknetConfig.getProviderWithAccount();
-      
-      // 2. Obtener la wallet del usuario para la public key
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('Usuario no autenticado');
-      }
-
-      final walletResult = await CreateOGetWalletCall.call(
-        firebaseUserUuid: user.uid,
-      );
-
-      if (!walletResult.succeeded) {
-        throw Exception('No se pudo obtener la wallet del usuario');
-      }
-
-      final publicKey = CreateOGetWalletCall.publicKey(walletResult.jsonBody);
-      if (publicKey == null) {
-        throw Exception('No se pudo obtener la public key');
-      }
-
-      // 3. Cifrar el secret con la public key
-      final secret = IPFSUploaderCall.secret(ipfsResponse.jsonBody);
-      if (secret == null) {
-        throw Exception('No se pudo obtener el secret de IPFS');
-      }
-
-      final encryptedSecret = encryptWithRSA(secret, publicKey);
-      print('🔐 Secret cifrado: $encryptedSecret');
-
-      // 4. Preparar los datos para el contrato
-      final cid = IPFSUploaderCall.ipfsCID(ipfsResponse.jsonBody);
-      final hashCommit = IPFSUploaderCall.hashCommit(ipfsResponse.jsonBody);
-      final memoryName = _model.memoryNameTextController.text;
-      final unlockTimestamp = _model.datePicked?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
-
-      // 5. Llamar al método save_metadata del contrato
-      final result = await provider.call(
-        request: FunctionCall(
-          contractAddress: Felt.fromHexString(StarknetConfig.contractAddress),
-          entryPointSelector: Felt.fromHexString('0x1234'), // TODO: Obtener el selector correcto
-          calldata: [
-            Felt.fromString(memoryName),
-            Felt.fromString(cid),
-            Felt.fromString(hashCommit),
-            Felt.fromString(encryptedSecret),
-            Felt.fromBigInt(BigInt.from(unlockTimestamp)),
-            Felt.fromBigInt(BigInt.from(0)), // Tipo de desbloqueo: 0 para timestamp
-          ],
-        ),
-        blockId: BlockId.latest,
-      );
-
-      print('✅ Metadata guardada exitosamente');
-      print('📝 Resultado: $result');
-
-      // Mostrar mensaje de éxito
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Memory created successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // TODO: Navegar a la siguiente pantalla o cerrar esta
-    } catch (e) {
-      print('❌ Error al guardar metadata: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving metadata: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // TODO: Mostrar error al usuario
     }
   }
 
