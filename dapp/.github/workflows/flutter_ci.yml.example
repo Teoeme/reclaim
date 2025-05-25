@@ -1,0 +1,160 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        
+    - name: Setup Firebase Config
+      run: |
+        # Crear archivo de configuración desde secretos
+        mkdir -p lib/backend/firebase
+        cat > lib/backend/firebase/firebase_config.dart << EOF
+        import 'package:firebase_core/firebase_core.dart';
+        import 'package:flutter/foundation.dart';
+
+        Future initFirebase() async {
+          if (kIsWeb) {
+            await Firebase.initializeApp(
+                options: FirebaseOptions(
+                    apiKey: "${{ secrets.FIREBASE_WEB_API_KEY }}",
+                    authDomain: "${{ secrets.FIREBASE_PROJECT_ID }}.firebaseapp.com",
+                    projectId: "${{ secrets.FIREBASE_PROJECT_ID }}",
+                    storageBucket: "${{ secrets.FIREBASE_PROJECT_ID }}.firebasestorage.app",
+                    messagingSenderId: "${{ secrets.FIREBASE_SENDER_ID }}",
+                    appId: "${{ secrets.FIREBASE_WEB_APP_ID }}"));
+          } else {
+            await Firebase.initializeApp();
+          }
+        }
+        EOF
+        
+    - name: Setup Environment Variables
+      run: |
+        # Crear archivo de variables de entorno desde secretos
+        mkdir -p assets/environment_values
+        cat > assets/environment_values/environment.json << EOF
+        {
+          "TokenStamping": "${{ secrets.TOKEN_STAMPING }}"
+        }
+        EOF
+        
+    - name: Setup Android Firebase Config
+      run: |
+        # Crear google-services.json desde secreto
+        mkdir -p android/app
+        echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Analyze code
+      run: flutter analyze
+      
+    - name: Run tests
+      run: flutter test
+      
+  build_android:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+        
+    - name: Setup Firebase Config
+      run: |
+        # Repetir configuración de Firebase
+        mkdir -p lib/backend/firebase
+        cat > lib/backend/firebase/firebase_config.dart << EOF
+        import 'package:firebase_core/firebase_core.dart';
+        import 'package:flutter/foundation.dart';
+
+        Future initFirebase() async {
+          if (kIsWeb) {
+            await Firebase.initializeApp(
+                options: FirebaseOptions(
+                    apiKey: "${{ secrets.FIREBASE_WEB_API_KEY }}",
+                    authDomain: "${{ secrets.FIREBASE_PROJECT_ID }}.firebaseapp.com",
+                    projectId: "${{ secrets.FIREBASE_PROJECT_ID }}",
+                    storageBucket: "${{ secrets.FIREBASE_PROJECT_ID }}.firebasestorage.app",
+                    messagingSenderId: "${{ secrets.FIREBASE_SENDER_ID }}",
+                    appId: "${{ secrets.FIREBASE_WEB_APP_ID }}"));
+          } else {
+            await Firebase.initializeApp();
+          }
+        }
+        EOF
+        
+    - name: Setup Environment Variables
+      run: |
+        mkdir -p assets/environment_values
+        cat > assets/environment_values/environment.json << EOF
+        {
+          "TokenStamping": "${{ secrets.TOKEN_STAMPING }}"
+        }
+        EOF
+        
+    - name: Setup Android Firebase Config
+      run: |
+        mkdir -p android/app
+        echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        
+    - name: Setup Android Signing
+      run: |
+        # Configurar signing desde secretos
+        echo '${{ secrets.ANDROID_KEYSTORE }}' | base64 -d > android/app/keystore.jks
+        cat > android/key.properties << EOF
+        storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
+        keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+        keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+        storeFile=keystore.jks
+        EOF
+        
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build APK
+      run: flutter build apk --release
+      
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-apk
+        path: build/app/outputs/flutter-apk/app-release.apk
+
+# Secretos requeridos en GitHub:
+# FIREBASE_WEB_API_KEY
+# FIREBASE_PROJECT_ID  
+# FIREBASE_SENDER_ID
+# FIREBASE_WEB_APP_ID
+# TOKEN_STAMPING
+# GOOGLE_SERVICES_JSON (contenido completo del archivo como string)
+# ANDROID_KEYSTORE (archivo keystore en base64)
+# ANDROID_STORE_PASSWORD
+# ANDROID_KEY_PASSWORD
+# ANDROID_KEY_ALIAS 
