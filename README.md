@@ -7,9 +7,7 @@ This repository contains the **Reclaim** project, developed for the [Re{ignite} 
 <img src='https://cdn.prod.website-files.com/67fd133ddb82322a63a09d4b/67fd17f25d83ce882f306427_hackathon-logo.svg'  width='50%'/>
 </div>
 
-[logo1]: https://cdn.prod.website-files.com/67fd133ddb82322a63a09d4b/67fd17f25d83ce882f306427_hackathon-logo.svg
-[logo2]: ./assets/Starknet-logo.png
-[logo3]: ./assets/reclaim-logo.jpg
+
 [hackathon-link]: https://hackathon.starknet.org
 [starknet-link]: https://starknet.io
 
@@ -56,6 +54,7 @@ All encryption and decryption happens **client-side**, ensuring total data priva
 
 reclaim
 ├── contract/ # Starknet Cairo 1.0 smart contract
+├─── [Cairo smart contract](contract/packages/snfoundry/contracts/src/reclaim.cairo)
 ├── frontend/ 
 ├── backend/ 
 

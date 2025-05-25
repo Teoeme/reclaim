@@ -82,6 +82,26 @@ fn HASH_COMMIT_3() -> ByteArray {
     "949e94934a751e6b947351b23642a0b093998d062d07d2a359f4cc5e44febcd7"
 }
 
+fn ACCESS_TYPE_TIMESTAMP() -> felt252 {
+    'timestamp'.try_into().unwrap()
+}
+
+fn ACCESS_TYPE_HEIRS() -> felt252 {
+    'heirs'.try_into().unwrap()
+}
+
+fn FILE_NAME() -> ByteArray {
+    "test_file.txt"
+}
+
+fn FILE_NAME_2() -> ByteArray {
+    "test_file_2.txt"
+}
+
+fn FILE_NAME_3() -> ByteArray {
+    "test_file_3.txt"
+}
+
 fn __deploy__() -> IReclaimDispatcher {
     let contractClass= declare("reclaim").unwrap().contract_class();
     let constructor_calldata = ArrayTrait::new();
@@ -100,16 +120,18 @@ fn test_save_metadata(){
     let unlock_timestamp: felt252 = 1747018800; // 2025-05-12 00:00:00 hackathon start date
     
     start_cheat_caller_address(reclaim.contract_address, USER_1());
-    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
     stop_cheat_caller_address(reclaim.contract_address);
     
     start_cheat_block_timestamp_global(unlock_timestamp.try_into().unwrap() + 1);
     
-    let (record_cipher_secret, record_cid, record_hash_commit, owner) = reclaim.reclaim(HASH_COMMIT());
+    let (record_cipher_secret, record_cid, record_hash_commit, owner, access_type, name) = reclaim.reclaim(HASH_COMMIT());
     assert(record_cipher_secret == CIPHER_SECRET(), 'Cipher secret mismatch');
     assert(record_cid == CID(), 'CID mismatch');
     assert(record_hash_commit == truncate_hash(HASH_COMMIT()), 'Hash commit mismatch');
     assert(USER_1().into() == owner, 'Owner mismatch');
+    assert(access_type == ACCESS_TYPE_TIMESTAMP(), 'Access type mismatch');
+    assert(name == FILE_NAME(), 'Name mismatch');
 }
 
 #[test]
@@ -118,28 +140,31 @@ fn test_save_and_reclaim_multiple_files(){
 
     let unlock_timestamp:felt252 = 1747018800; // 2025-05-12 00:00:00 hackathon start date
 
-    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
 
     let unlock_timestamp2:felt252 = 1747018800; 
 
-    reclaim.save_metadata(HASH_COMMIT_2(), CIPHER_SECRET2(), CID_2(), unlock_timestamp2);
+    reclaim.save_metadata(HASH_COMMIT_2(), CIPHER_SECRET2(), CID_2(), unlock_timestamp2, ACCESS_TYPE_HEIRS(), FILE_NAME_2());
 
     let unlock_timestamp3:felt252 = 1747018800; 
 
-    reclaim.save_metadata(HASH_COMMIT_3(), CIPHER_SECRET3(), CID_3(), unlock_timestamp3);
+    reclaim.save_metadata(HASH_COMMIT_3(), CIPHER_SECRET3(), CID_3(), unlock_timestamp3, ACCESS_TYPE_TIMESTAMP(), FILE_NAME_3());
 
     start_cheat_block_timestamp_global(unlock_timestamp.try_into().unwrap() + 1);
 
-    let (record_cipher_secret, record_cid, record_hash_commit,_) = reclaim.reclaim(HASH_COMMIT_2());
+    let (record_cipher_secret, record_cid, record_hash_commit, _, access_type, name) = reclaim.reclaim(HASH_COMMIT_2());
     assert(record_cipher_secret == CIPHER_SECRET2(), 'Cipher secret mismatch');
     assert(record_cid == CID_2(), 'CID mismatch');
     assert(record_hash_commit == truncate_hash(HASH_COMMIT_2()), 'Hash commit mismatch');
+    assert(access_type == ACCESS_TYPE_HEIRS(), 'Access type mismatch');
+    assert(name == FILE_NAME_2(), 'Name mismatch');
 
-
-    let (record_cipher_secret, record_cid, record_hash_commit,_) = reclaim.reclaim(HASH_COMMIT());
+    let (record_cipher_secret, record_cid, record_hash_commit, _, access_type, name) = reclaim.reclaim(HASH_COMMIT());
     assert(record_cipher_secret == CIPHER_SECRET(), 'Cipher secret mismatch');
     assert(record_cid == CID(), 'CID mismatch');
-    assert(record_hash_commit == truncate_hash(HASH_COMMIT()), 'Hash commit mismatch'); 
+    assert(record_hash_commit == truncate_hash(HASH_COMMIT()), 'Hash commit mismatch');
+    assert(access_type == ACCESS_TYPE_TIMESTAMP(), 'Access type mismatch');
+    assert(name == FILE_NAME(), 'Name mismatch');
 }
 
 #[test]
@@ -149,7 +174,7 @@ fn test_reclaim_before_unlock_timestamp(){
 
     let unlock_timestamp:felt252 = 1747018800; 
 
-    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
     
     start_cheat_block_timestamp_global(unlock_timestamp.try_into().unwrap() - 1);
 
@@ -163,7 +188,7 @@ fn test_save_metadata_event(){
     let unlock_timestamp: felt252 = 1747018800; 
 
     let mut emitted_events = spy_events();
-    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
 
     emitted_events.assert_emitted(
         @array![
@@ -185,7 +210,7 @@ fn test_reclaim_event(){
     let unlock_timestamp: felt252 = 1747018800; 
 
     let mut emitted_events = spy_events();
-    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
 
     start_cheat_block_timestamp_global(unlock_timestamp.try_into().unwrap() + 1);
 
@@ -209,29 +234,33 @@ fn test_get_records_by_owner(){
 
     let unlock_timestamp: felt252 = 1747018800; 
     start_cheat_caller_address(reclaim.contract_address, USER_1());
-    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
     
     let unlock_timestamp2: felt252 = 1747018800; 
     
-    reclaim.save_metadata(HASH_COMMIT_2(), CIPHER_SECRET2(), CID_2(), unlock_timestamp2);
+    reclaim.save_metadata(HASH_COMMIT_2(), CIPHER_SECRET2(), CID_2(), unlock_timestamp2, ACCESS_TYPE_HEIRS(), FILE_NAME_2());
     stop_cheat_caller_address(reclaim.contract_address);
 
     start_cheat_caller_address(reclaim.contract_address, USER_2());
     let unlock_timestamp3: felt252 = 1747018800; 
     
-    reclaim.save_metadata(HASH_COMMIT_3(), CIPHER_SECRET3(), CID_3(), unlock_timestamp3);
+    reclaim.save_metadata(HASH_COMMIT_3(), CIPHER_SECRET3(), CID_3(), unlock_timestamp3, ACCESS_TYPE_TIMESTAMP(), FILE_NAME_3());
     stop_cheat_caller_address(reclaim.contract_address);
 
     let records = reclaim.get_records_by_owner(USER_1().into());
     assert(records.len() == 2, 'Number of records mismatch');
-    let (first_cid, _, _) = records[0];
+    let (first_cid, _, _, access_type, name) = records[0];
     assert(first_cid == @CID(), 'CID mismatch');
+    assert(access_type == @ACCESS_TYPE_TIMESTAMP(), 'Access type mismatch');
+    assert(name == @FILE_NAME(), 'Name mismatch');
     println!(" USER_1 records: {:?}", first_cid);
 
     let records2 = reclaim.get_records_by_owner(USER_2().into());
     assert(records2.len() == 1, 'Number of records mismatch');
-    let (first_cid2, _, _) = records2[0];
+    let (first_cid2, _, _, access_type, name) = records2[0];
     assert(first_cid2 == @CID_3(), 'CID mismatch');
+    assert(access_type == @ACCESS_TYPE_TIMESTAMP(), 'Access type mismatch');
+    assert(name == @FILE_NAME_3(), 'Name mismatch');
 }
 
 #[test]
@@ -240,15 +269,33 @@ fn test_reclaim_with_short_hash_commit(){
 
     let unlock_timestamp: felt252 = 1747018800; 
 
-    reclaim.save_metadata(HASH_COMMIT_2(), CIPHER_SECRET(), CID(), unlock_timestamp);
+    reclaim.save_metadata(HASH_COMMIT_2(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), FILE_NAME());
     
     let short_hash_commit = truncate_hash(HASH_COMMIT_2());
     let short_hash_commit_barray= HASH_COMMIT_2_SHORT();
     println!("short_hash_commit_barray: {:?}", short_hash_commit_barray);
     
     start_cheat_block_timestamp_global(unlock_timestamp.try_into().unwrap() + 1);
-    let (record_cipher_secret, record_cid, record_hash_commit,_) = reclaim.reclaim(short_hash_commit_barray);
+    let (record_cipher_secret, record_cid, record_hash_commit, _, access_type, name) = reclaim.reclaim(short_hash_commit_barray);
     assert(record_cipher_secret == CIPHER_SECRET(), 'Cipher secret mismatch');
     assert(record_cid == CID(), 'CID mismatch');
-    assert(record_hash_commit == short_hash_commit, 'Hash commit mismatch'); 
+    assert(record_hash_commit == short_hash_commit, 'Hash commit mismatch');
+    assert(access_type == ACCESS_TYPE_TIMESTAMP(), 'Access type mismatch');
+    assert(name == FILE_NAME(), 'Name mismatch');
+}
+
+#[test]
+#[should_panic(expected : 'R: Invalid access type')]
+fn test_invalid_access_type(){
+    let reclaim = __deploy__();
+    let unlock_timestamp: felt252 = 1747018800;
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp,'invalid', FILE_NAME());
+}
+
+#[test]
+#[should_panic(expected : 'R: Invalid name')]
+fn test_invalid_name(){
+    let reclaim = __deploy__();
+    let unlock_timestamp: felt252 = 1747018800;
+    reclaim.save_metadata(HASH_COMMIT(), CIPHER_SECRET(), CID(), unlock_timestamp, ACCESS_TYPE_TIMESTAMP(), "");
 }

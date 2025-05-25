@@ -5,10 +5,12 @@ pub trait IReclaim<TContractState> {
         hash_commit: ByteArray, 
         cipher_secret: ByteArray, 
         cid: ByteArray, 
-        unlock_timestamp: felt252
+        unlock_timestamp: felt252,
+        access_type: felt252,
+        name: ByteArray
     );
-    fn reclaim(ref self: TContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252);
-    fn get_records_by_owner(self: @TContractState, owner: felt252) -> Array<(ByteArray, felt252, felt252)>;
+    fn reclaim(ref self: TContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252, felt252, ByteArray);
+    fn get_records_by_owner(self: @TContractState, owner: felt252) -> Array<(ByteArray, felt252, felt252, felt252, ByteArray)>;
 }
 
 #[starknet::contract]
@@ -28,7 +30,9 @@ pub mod reclaim {
         hash_commit: felt252,
         cipher_secret: ByteArray,
         unlock_timestamp: felt252,
-        owner: ContractAddress
+        owner: ContractAddress,
+        access_type: felt252,
+        name: ByteArray,
     }
 
     #[storage]
@@ -81,13 +85,17 @@ pub mod reclaim {
             hash_commit: ByteArray,
             cipher_secret: ByteArray, 
             cid: ByteArray, 
-            unlock_timestamp: felt252
+            unlock_timestamp: felt252,
+            access_type: felt252,
+            name: ByteArray
         ) {
             let truncated_hash = InternalFunctions::truncate_hash(hash_commit);
             assert(truncated_hash != 0, 'R: Invalid hash commit');
             assert(cipher_secret.len() > 0, 'R: Invalid cipher secret');
             assert(cid.len() > 0, 'R: Invalid CID');
+            assert(name.len() > 0, 'R: Invalid name');
             assert(unlock_timestamp.try_into().unwrap() > get_block_timestamp(), 'R: Invalid unlock timestamp');
+            assert(access_type == 'timestamp' || access_type == 'heirs', 'R: Invalid access type');
             
             let existing = self.records.entry(truncated_hash).read();
             assert(existing.hash_commit == 0, 'R: Hash commit already exists');
@@ -98,25 +106,27 @@ pub mod reclaim {
                 cipher_secret, 
                 cid, 
                 unlock_timestamp, 
-                owner 
+                owner,
+                access_type,
+                name
             };
             self.records.entry(truncated_hash).write(record);
-            self.all_hash_commits.push(truncated_hash);  // Save hash_commit in the array
+            self.all_hash_commits.push(truncated_hash);
 
             self.emit(Event::MetadataSaved(MetadataSaved { hash_commit: truncated_hash, unlock_timestamp }));
         }
     
-        fn reclaim(ref self: ContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252) {
+        fn reclaim(ref self: ContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252, felt252, ByteArray) {
             let truncated_hash: felt252 = InternalFunctions::truncate_hash(hash_commit);
             let record = self.records.entry(truncated_hash).read();
             assert(record.hash_commit != 0, 'R: Record not found');
             assert(get_block_timestamp() >= record.unlock_timestamp.try_into().unwrap(), 'R: File still locked');
 
             self.emit(Event::FileReclaimed(FileReclaimed { hash_commit: truncated_hash }));
-            (record.cipher_secret, record.cid, record.hash_commit, record.owner.into())
+            (record.cipher_secret, record.cid, record.hash_commit, record.owner.into(), record.access_type, record.name)
         }
 
-        fn get_records_by_owner(self: @ContractState, owner: felt252) -> Array<(ByteArray, felt252, felt252)> {
+        fn get_records_by_owner(self: @ContractState, owner: felt252) -> Array<(ByteArray, felt252, felt252, felt252, ByteArray)> {
             let mut records_array = ArrayTrait::new();
             
             for i in 0..self.all_hash_commits.len() {
@@ -124,7 +134,7 @@ pub mod reclaim {
                 let record = self.records.entry(hash_commit).read();
                 let owner_address: felt252 = record.owner.into();
                 if owner_address == owner {
-                    records_array.append((record.cid, record.hash_commit, record.unlock_timestamp));
+                    records_array.append((record.cid, record.hash_commit, record.unlock_timestamp, record.access_type, record.name));
                 }
             };
             
