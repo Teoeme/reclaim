@@ -19,14 +19,21 @@ void main() async {
   GoRouter.optionURLReflectsImperativeAPIs = true;
   usePathUrlStrategy();
 
-  final environmentValues = FFDevEnvironmentValues();
-  await environmentValues.initialize();
+  try {
+    final environmentValues = FFDevEnvironmentValues();
+    await environmentValues.initialize();
 
-  await initFirebase();
+    await initFirebase();
 
-  await FlutterFlowTheme.initialize();
+    await FlutterFlowTheme.initialize();
 
-  runApp(MyApp());
+    runApp(MyApp());
+  } catch (e, stackTrace) {
+    print('❌ Error durante la inicialización: $e');
+    print('📍 Stack trace: $stackTrace');
+    // Ejecutar la app de todos modos para mostrar una pantalla de error
+    runApp(MyApp());
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -67,14 +74,23 @@ class _MyAppState extends State<MyApp> {
 
     _appStateNotifier = AppStateNotifier.instance;
     _router = createRouter(_appStateNotifier);
+    
     userStream = reclaimFirebaseUserStream()
       ..listen((user) {
         _appStateNotifier.update(user);
+      }, onError: (error) {
+        print('❌ Error en stream de usuario: $error');
       });
-    jwtTokenStream.listen((_) {});
+    
+    jwtTokenStream.listen((_) {}, onError: (error) {
+      print('❌ Error en stream de JWT: $error');
+    });
+    
     Future.delayed(
       Duration(milliseconds: 1000),
-      () => _appStateNotifier.stopShowingSplashImage(),
+      () {
+        _appStateNotifier.stopShowingSplashImage();
+      },
     );
   }
 
@@ -92,25 +108,48 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      debugShowCheckedModeBanner: false,
-      title: 'Reclaim',
-      localizationsDelegates: [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('en', '')],
-      theme: ThemeData(
-        brightness: Brightness.light,
-        useMaterial3: false,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        useMaterial3: false,
-      ),
-      themeMode: _themeMode,
-      routerConfig: _router,
+    return AnimatedBuilder(
+      animation: _appStateNotifier,
+      builder: (context, child) {
+        // Si está cargando, mostrar splash screen
+        if (_appStateNotifier.loading) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Reclaim',
+            home: Container(
+              color: Color(0xFF4D7C84), // Color del splash
+              child: Center(
+                child: Image.asset(
+                  'assets/images/ChatGPT_Image_May_8,_2025,_10_58_45_AM.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          );
+        }
+        
+        // Si no está cargando, mostrar la aplicación normal
+        return MaterialApp.router(
+          debugShowCheckedModeBanner: false,
+          title: 'Reclaim',
+          localizationsDelegates: [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('en', '')],
+          theme: ThemeData(
+            brightness: Brightness.light,
+            useMaterial3: false,
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            useMaterial3: false,
+          ),
+          themeMode: _themeMode,
+          routerConfig: _router,
+        );
+      },
     );
   }
 }

@@ -61,6 +61,7 @@ class AppStateNotifier extends ChangeNotifier {
         user?.uid == null || newUser.uid == null || user?.uid != newUser.uid;
     initialUser ??= newUser;
     user = newUser;
+    
     // Refresh the app on auth change unless explicitly marked otherwise.
     // No need to update unless the user has changed.
     if (notifyOnAuthChange && shouldUpdate) {
@@ -317,15 +318,9 @@ class FFRoute {
                   builder: (context, _) => builder(context, ffParams),
                 )
               : builder(context, ffParams);
-          final child = appStateNotifier.loading
-              ? Container(
-                  color: FlutterFlowTheme.of(context).tertiary,
-                  child: Image.asset(
-                    'assets/images/ChatGPT_Image_May_8,_2025,_10_58_45_AM.png',
-                    fit: BoxFit.contain,
-                  ),
-                )
-              : page;
+          
+          // Ya no manejamos el splash screen aquí, se maneja en el nivel superior
+          final child = page;
 
           final transitionInfo = state.transitionInfo;
           return transitionInfo.hasTransition
