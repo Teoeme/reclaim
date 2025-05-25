@@ -5,6 +5,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
 import '/flutter_flow/app_state.dart';
+import '/services/starknet_service.dart';
 import 'dart:ui';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/auth/firebase_auth/auth_util.dart';
@@ -527,45 +528,85 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                             }
                           }
                         },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Icon(
-                              Icons.add_a_photo_rounded,
-                              color: FlutterFlowTheme.of(context).primaryText,
-                              size: 32.0,
-                            ),
-                            Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                  16.0, 0.0, 0.0, 0.0),
-                              child: Text(
-                                _model.uploadedLocalFile.bytes?.isNotEmpty ?? false
-                                    ? 'Cambiar Screenshot'
-                                    : 'Upload Screenshot',
-                                textAlign: TextAlign.center,
-                                style: FlutterFlowTheme.of(context)
-                                    .bodyMedium
-                                    .override(
-                                      font: GoogleFonts.inter(
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                      letterSpacing: 0.0,
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontStyle,
+                        child: _model.uploadedLocalFile.bytes?.isNotEmpty == true
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8.0),
+                                    child: Image.memory(
+                                      _model.uploadedLocalFile.bytes!,
+                                      width: 300.0,
+                                      height: 200.0,
+                                      fit: BoxFit.cover,
                                     ),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsetsDirectional.fromSTEB(
+                                        0.0, 8.0, 0.0, 0.0),
+                                    child: Text(
+                                      'Tap to change image',
+                                      style: FlutterFlowTheme.of(context)
+                                          .bodySmall
+                                          .override(
+                                            font: GoogleFonts.inter(
+                                              fontWeight: FlutterFlowTheme.of(context)
+                                                  .bodySmall
+                                                  .fontWeight,
+                                              fontStyle: FlutterFlowTheme.of(context)
+                                                  .bodySmall
+                                                  .fontStyle,
+                                            ),
+                                            color: FlutterFlowTheme.of(context).secondaryText,
+                                            letterSpacing: 0.0,
+                                            fontWeight: FlutterFlowTheme.of(context)
+                                                .bodySmall
+                                                .fontWeight,
+                                            fontStyle: FlutterFlowTheme.of(context)
+                                                .bodySmall
+                                                .fontStyle,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  Icon(
+                                    Icons.add_a_photo_rounded,
+                                    color: FlutterFlowTheme.of(context).primaryText,
+                                    size: 32.0,
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsetsDirectional.fromSTEB(
+                                        16.0, 0.0, 0.0, 0.0),
+                                    child: Text(
+                                      'Upload Screenshot',
+                                      textAlign: TextAlign.center,
+                                      style: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .override(
+                                            font: GoogleFonts.inter(
+                                              fontWeight: FlutterFlowTheme.of(context)
+                                                  .bodyMedium
+                                                  .fontWeight,
+                                              fontStyle: FlutterFlowTheme.of(context)
+                                                  .bodyMedium
+                                                  .fontStyle,
+                                            ),
+                                            letterSpacing: 0.0,
+                                            fontWeight: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .fontWeight,
+                                            fontStyle: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .fontStyle,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
                   ),
@@ -575,6 +616,30 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                   child: FFButtonWidget(
                     onPressed: () async {
                       var _shouldSetState = false;
+                      
+                      // Validar que todos los campos estén completos
+                      if (_model.memoryNameTextController.text.isEmpty ||
+                          _model.memoryDescriptionTextController.text.isEmpty ||
+                          _model.datePicked == null ||
+                          _model.uploadedLocalFile.bytes == null) {
+                        await showDialog(
+                          context: context,
+                          builder: (alertDialogContext) {
+                            return AlertDialog(
+                              title: Text('Campos Incompletos'),
+                              content: Text('Por favor, completa todos los campos antes de continuar.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(alertDialogContext),
+                                  child: Text('OK'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        return;
+                      }
                       
                       // Obtenemos la información del wallet desde el estado global
                       final appState = Provider.of<AppState>(context, listen: false);
@@ -600,72 +665,223 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                         return;
                       }
                       
-                      // Obtenemos la publicKey del usuario desde el estado global
-                      final userPublicKey = appState.userPublicKey!;
-                      print('userPublicKey: $userPublicKey');
-                      // Subimos el archivo a IPFS
-                      _model.apiResultrar = await IPFSUploaderCall.call(
-                        base64File:
-                            functions.uploadedFileToBase64WithDetectedMime(
-                                _model.uploadedLocalFile),
+                      // Mostrar indicador de carga
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            content: Row(
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(width: 20),
+                                Text('Procesando memoria...'),
+                              ],
+                            ),
+                          );
+                        },
                       );
-
-                      _shouldSetState = true;
-                      if (!(_model.apiResultrar?.succeeded ?? true)) {
-                        await showDialog(
-                          context: context,
-                          builder: (alertDialogContext) {
-                            return AlertDialog(
-                              title: Text('System Error'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(alertDialogContext),
-                                  child: Text('Error'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                        if (_shouldSetState) safeSetState(() {});
-                        return;
-                      }
                       
-                      // Obtenemos el secret de la respuesta de IPFS
-                      final originalSecret = IPFSUploaderCall.fileSecret(_model.apiResultrar?.jsonBody);
-                      print('originalSecret: $originalSecret');
-                      if (originalSecret == null || originalSecret.isEmpty) {
-                        await showDialog(
-                          context: context,
-                          builder: (alertDialogContext) {
-                            return AlertDialog(
-                              title: Text('Error del Sistema'),
-                              content: Text('No se pudo obtener el secret del archivo'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(alertDialogContext),
-                                  child: Text('OK'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                        if (_shouldSetState) safeSetState(() {});
-                        return;
-                      }
-                      
-                      // Ciframos el secret con la publicKey del usuario usando RSA
-                      String encryptedSecret;
                       try {
-                        encryptedSecret = functions.encryptWithRSA(originalSecret, userPublicKey);
+                        // Obtenemos la información del wallet
+                        final userPublicKey = appState.userPublicKey!;
+                        final userPrivateKey = appState.userPrivateKey!;
+                        final userWalletAddress = appState.userWalletAddress!;
+                        
+                        print('userPublicKey: $userPublicKey');
+                        print('userWalletAddress: $userWalletAddress');
+                        
+                        // Subimos el archivo a IPFS
+                        _model.apiResultrar = await IPFSUploaderCall.call(
+                          base64File:
+                              functions.uploadedFileToBase64WithDetectedMime(
+                                  _model.uploadedLocalFile),
+                        );
+
+                        _shouldSetState = true;
+                        if (!(_model.apiResultrar?.succeeded ?? true)) {
+                          Navigator.pop(context); // Cerrar loading
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('Error de Subida'),
+                                content: Text('No se pudo subir el archivo a IPFS'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          if (_shouldSetState) safeSetState(() {});
+                          return;
+                        }
+                        
+                        // Obtenemos los datos de la respuesta de IPFS
+                        final originalSecret = IPFSUploaderCall.fileSecret(_model.apiResultrar?.jsonBody);
+                        final hashCommit = IPFSUploaderCall.hashCommit(_model.apiResultrar?.jsonBody);
+                        final cid = IPFSUploaderCall.ipfsCID(_model.apiResultrar?.jsonBody);
+                        
+                        print('originalSecret: $originalSecret');
+                        print('hashCommit: $hashCommit');
+                        print('cid: $cid');
+                        
+                        if (originalSecret == null || originalSecret.isEmpty ||
+                            hashCommit == null || hashCommit.isEmpty ||
+                            cid == null || cid.isEmpty) {
+                          Navigator.pop(context); // Cerrar loading
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('Error del Sistema'),
+                                content: Text('No se pudieron obtener todos los datos del archivo IPFS'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          if (_shouldSetState) safeSetState(() {});
+                          return;
+                        }
+                        
+                        // Ciframos el secret con la publicKey del usuario usando RSA
+                        String encryptedSecret;
+                        try {
+                          encryptedSecret = functions.encryptWithRSA(originalSecret, userPublicKey);
+                        } catch (e) {
+                          Navigator.pop(context); // Cerrar loading
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('Error de Cifrado'),
+                                content: Text('No se pudo cifrar el secret: ${e.toString()}'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          if (_shouldSetState) safeSetState(() {});
+                          return;
+                        }
+                        
+                        print('encryptedSecret: $encryptedSecret');
+                        
+                        // Inicializar el servicio de Starknet
+                        final starknetService = StarknetService();
+                        
+                        // Verificar el estado de AVNU
+                        final avnuStatus = await starknetService.checkAvnuStatus();
+                        if (!avnuStatus) {
+                          Navigator.pop(context); // Cerrar loading
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('Servicio No Disponible'),
+                                content: Text('El servicio AVNU no está disponible en este momento. Intenta más tarde.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          if (_shouldSetState) safeSetState(() {});
+                          return;
+                        }
+                        
+                        // Guardar la metadata en el contrato usando AVNU gasless
+                        final transactionHash = await starknetService.saveMemoryMetadata(
+                          userAddress: userWalletAddress,
+                          memoryName: _model.memoryNameTextController.text,
+                          memoryDescription: _model.memoryDescriptionTextController.text,
+                          unlockTimestamp: _model.datePicked!,
+                          encryptedSecret: encryptedSecret,
+                          encryptedPrivateKey: userPrivateKey, // Esta es la clave cifrada
+                          userPublicKey: userPublicKey,
+                          hashCommit: hashCommit,
+                          cid: cid,
+                        );
+                        
+                        Navigator.pop(context); // Cerrar loading
+                        
+                        if (transactionHash != null) {
+                          // Éxito
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('¡Memoria Creada!'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Tu memoria ha sido guardada exitosamente en la blockchain.'),
+                                    SizedBox(height: 10),
+                                    Text('Hash de transacción:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    SelectableText(transactionHash, style: TextStyle(fontSize: 12)),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(alertDialogContext);
+                                      context.pop(); // Volver a la pantalla anterior
+                                    },
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        } else {
+                          // Error
+                          await showDialog(
+                            context: context,
+                            builder: (alertDialogContext) {
+                              return AlertDialog(
+                                title: Text('Error de Transacción'),
+                                content: Text('No se pudo guardar la memoria en la blockchain. Verifica que tengas rewards disponibles o intenta más tarde.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('OK'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        }
+                        
                       } catch (e) {
+                        Navigator.pop(context); // Cerrar loading si está abierto
+                        print('Error general: $e');
                         await showDialog(
                           context: context,
                           builder: (alertDialogContext) {
                             return AlertDialog(
-                              title: Text('Error de Cifrado'),
-                              content: Text('No se pudo cifrar el secret: ${e.toString()}'),
+                              title: Text('Error Inesperado'),
+                              content: Text('Ocurrió un error inesperado: ${e.toString()}'),
                               actions: [
                                 TextButton(
                                   onPressed: () =>
@@ -676,13 +892,7 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                             );
                           },
                         );
-                        if (_shouldSetState) safeSetState(() {});
-                        return;
                       }
-                      
-                      print('encryptedSecret: $encryptedSecret');
-                      // TODO: Aquí deberías usar el encryptedSecret en lugar del originalSecret
-                      // para guardarlo en el contrato inteligente o donde sea necesario
                       
                       if (_shouldSetState) safeSetState(() {});
                     },

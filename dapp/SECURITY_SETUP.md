@@ -34,9 +34,18 @@ Future initFirebase() async {
 #### `assets/environment_values/environment.json`
 ```json
 {
-  "TokenStamping": "tu_token_stamping_real_aqui"
+  "TokenStamping": "tu_token_stamping_real_aqui",
+  "AvnuApiKey": "tu_api_key_de_avnu_aqui",
+  "HashSecret": "tu_hash_secret_aqui",
+  "ContractAddress": "tu_direccion_de_contrato_aqui"
 }
 ```
+
+**Descripción de las variables:**
+- **TokenStamping**: Token para el servicio de stamping y encriptación
+- **AvnuApiKey**: API key para AVNU Provider (transacciones gasless en Starknet)
+- **HashSecret**: Secret para descifrar claves privadas de usuarios
+- **ContractAddress**: Dirección del contrato inteligente en Starknet Sepolia
 
 ### 3. Android Configuration
 
@@ -108,6 +117,22 @@ flutter run
    - Apple Sign-In
    - Email/Password
 
+## 🔗 Obtener las Claves de Starknet/AVNU
+
+### AVNU API Key
+1. Contacta al equipo de AVNU para obtener acceso a su servicio de Paymaster
+2. Solicita una API key para transacciones gasless en Starknet
+3. Asegúrate de especificar que es para Starknet Sepolia (testnet)
+
+### Hash Secret
+- Este valor es proporcionado por el sistema de encriptación interno
+- Contacta a los administradores del proyecto para obtenerlo
+
+### Contract Address
+- Dirección del contrato inteligente desplegado en Starknet Sepolia
+- Formato: `0x...` (dirección hexadecimal de 64 caracteres)
+- Contacta al equipo de desarrollo para la dirección actual
+
 ## 🚨 Seguridad Importante
 
 ### ❌ NUNCA hagas esto:
@@ -131,6 +156,9 @@ env:
   FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
   FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
   TOKEN_STAMPING: ${{ secrets.TOKEN_STAMPING }}
+  AVNU_API_KEY: ${{ secrets.AVNU_API_KEY }}
+  HASH_SECRET: ${{ secrets.HASH_SECRET }}
+  CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
 ```
 
 ### Variables de entorno locales
@@ -139,6 +167,9 @@ Crea un archivo `.env` (también ignorado por Git):
 FIREBASE_WEB_API_KEY=tu_clave_aqui
 FIREBASE_PROJECT_ID=tu_proyecto_aqui
 TOKEN_STAMPING=tu_token_aqui
+AVNU_API_KEY=tu_api_key_de_avnu_aqui
+HASH_SECRET=tu_hash_secret_aqui
+CONTRACT_ADDRESS=tu_direccion_de_contrato_aqui
 ```
 
 ## 📞 Soporte

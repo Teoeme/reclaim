@@ -151,19 +151,10 @@ class AESDecryptCall {
     );
   }
 
-  static String? ipfsCID(dynamic response) => castToType<String>(getJsonField(
-        response,
-        r'''$.response.ipfs_res.cid''',
-      ));
-  static String? fileSecret(dynamic response) =>
+  static String? decryptedData(dynamic response) =>
       castToType<String>(getJsonField(
         response,
-        r'''$.response.secret''',
-      ));
-  static String? hashCommit(dynamic response) =>
-      castToType<String>(getJsonField(
-        response,
-        r'''$.response.hash_commit''',
+        r'''$.response.decrypted_data''',
       ));
 }
 

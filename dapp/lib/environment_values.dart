@@ -22,6 +22,9 @@ class FFDevEnvironmentValues {
           await rootBundle.loadString(environmentValuesPath);
       final data = await json.decode(response);
       _TokenStamping = data['TokenStamping'];
+      _AvnuApiKey = data['AvnuApiKey'];
+      _HashSecret = data['HashSecret'];
+      _ContractAddress = data['ContractAddress'];
     } catch (e) {
       print('Error loading environment values: $e');
     }
@@ -29,4 +32,13 @@ class FFDevEnvironmentValues {
 
   String _TokenStamping = '';
   String get TokenStamping => _TokenStamping;
+  
+  String _AvnuApiKey = '';
+  String get AvnuApiKey => _AvnuApiKey;
+  
+  String _HashSecret = '';
+  String get HashSecret => _HashSecret;
+  
+  String _ContractAddress = '';
+  String get ContractAddress => _ContractAddress;
 }
