@@ -44,4 +44,17 @@ coverage/
 # Archivos temporales
 *.tmp
 *.temp
-.cache/ 
+.cache/
+
+# Reglas específicas de contract
+package-lock.json
+.vercel
+
+# yarn / eslint
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.eslintcache 
