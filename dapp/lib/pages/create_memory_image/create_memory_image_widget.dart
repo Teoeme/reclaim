@@ -441,32 +441,6 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                     ),
                   ),
                 ),
-                // Mostrar imagen seleccionada si existe
-                if (_model.uploadedLocalFile.bytes?.isNotEmpty ?? false)
-                  Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: Container(
-                      width: 350.0,
-                      height: 200.0,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        borderRadius: BorderRadius.circular(12.0),
-                        border: Border.all(
-                          color: FlutterFlowTheme.of(context).primary,
-                          width: 2.0,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10.0),
-                        child: Image.memory(
-                          _model.uploadedLocalFile.bytes!,
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
                 Padding(
                   padding: EdgeInsets.all(20.0),
                   child: Container(
