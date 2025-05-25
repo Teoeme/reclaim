@@ -1,0 +1,47 @@
+# Dependencias
+node_modules/
+target/
+dist/
+build/
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Archivos de IDE y editores
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Archivos de compilación y caché
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Archivos de Starknet
+*.sierra
+*.casm
+*.json
+!package.json
+!tsconfig.json
+
+# Archivos de logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de cobertura y testing
+coverage/
+.nyc_output/
+
+# Archivos temporales
+*.tmp
+*.temp
+.cache/ 
