@@ -56,6 +56,14 @@ const deployedContracts = {
                   name: "unlock_timestamp",
                   type: "core::felt252",
                 },
+                {
+                  name: "access_type",
+                  type: "core::felt252",
+                },
+                {
+                  name: "name",
+                  type: "core::byte_array::ByteArray",
+                },
               ],
               outputs: [],
               state_mutability: "external",
@@ -71,7 +79,7 @@ const deployedContracts = {
               ],
               outputs: [
                 {
-                  type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252)",
+                  type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)",
                 },
               ],
               state_mutability: "external",
@@ -87,7 +95,7 @@ const deployedContracts = {
               ],
               outputs: [
                 {
-                  type: "core::array::Array::<(core::byte_array::ByteArray, core::felt252, core::felt252)>",
+                  type: "core::array::Array::<(core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)>",
                 },
               ],
               state_mutability: "view",
@@ -197,6 +205,14 @@ const deployedContracts = {
                   name: "unlock_timestamp",
                   type: "core::felt252",
                 },
+                {
+                  name: "access_type",
+                  type: "core::felt252",
+                },
+                {
+                  name: "name",
+                  type: "core::byte_array::ByteArray",
+                },
               ],
               outputs: [],
               state_mutability: "external",
@@ -212,7 +228,7 @@ const deployedContracts = {
               ],
               outputs: [
                 {
-                  type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252)",
+                  type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)",
                 },
               ],
               state_mutability: "external",
@@ -228,7 +244,7 @@ const deployedContracts = {
               ],
               outputs: [
                 {
-                  type: "core::array::Array::<(core::byte_array::ByteArray, core::felt252, core::felt252)>",
+                  type: "core::array::Array::<(core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)>",
                 },
               ],
               state_mutability: "view",
@@ -289,7 +305,7 @@ const deployedContracts = {
   sepolia: {
     reclaim: {
       address:
-        "0x3b28c44acda70b066938796c94a02ed65826f7c66366bdc3c95defc13c7ca07",
+        "0x23398f48021e7fc236e1f57b4b332cf26c3b29b5e06697186efba134bde5650",
       abi: [
         {
           type: "impl",
@@ -338,6 +354,14 @@ const deployedContracts = {
                   name: "unlock_timestamp",
                   type: "core::felt252",
                 },
+                {
+                  name: "access_type",
+                  type: "core::felt252",
+                },
+                {
+                  name: "name",
+                  type: "core::byte_array::ByteArray",
+                },
               ],
               outputs: [],
               state_mutability: "external",
@@ -353,7 +377,7 @@ const deployedContracts = {
               ],
               outputs: [
                 {
-                  type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252)",
+                  type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)",
                 },
               ],
               state_mutability: "external",
@@ -369,7 +393,7 @@ const deployedContracts = {
               ],
               outputs: [
                 {
-                  type: "core::array::Array::<(core::byte_array::ByteArray, core::felt252, core::felt252)>",
+                  type: "core::array::Array::<(core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)>",
                 },
               ],
               state_mutability: "view",
@@ -424,7 +448,7 @@ const deployedContracts = {
         },
       ],
       classHash:
-        "0x46fb829bee4538c3485dbd2fc74e39bc8218bdc1868248196f79c54f67ba55b",
+        "0x4ad2de1136dfb6ba7f3b35d74d4306dc0eda06ff92e2ddf8a0e8e16e3e074a2",
     },
   },
 } as const;
