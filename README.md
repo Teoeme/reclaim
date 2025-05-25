@@ -109,7 +109,7 @@ Built with care by:
 
 - Jean Pool Cruz [@jpool09](https://github.com/jpool09) — App design + Flutter development
 - Mateo Atilio Mancinelli [@teoeme](https://github.com/teoeme) — Smart Contract + protocol design
-- Ricardo Mazuera [@ricardomazuera](https://github.com/ricardomazuera) — Invisible wallet creation + starknet.dart implementation
+- Rinato [@rinatodev](https://github.com/rinatodev) — Invisible wallet creation + starknet.dart implementation
 
 
 
