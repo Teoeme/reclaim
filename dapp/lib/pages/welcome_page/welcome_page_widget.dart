@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import '/flutter_flow/app_state.dart';
 import 'dart:math';
 import 'dart:ui';
 import '/index.dart';
@@ -306,18 +307,18 @@ class _WelcomePageWidgetState extends State<WelcomePageWidget>
                             }
                             _navigate = () => context.goNamedAuth(
                                 HomePageWidget.routeName, context.mounted);
-                            _model.walletResult =
-                                await CreateOGetWalletCall.call(
-                              firebaseUserUuid: currentUserUid,
-                            );
-
-                            _shouldSetState = true;
-                            if (!(_model.walletResult?.succeeded ?? true)) {
+                            
+                            // Cargar la información del wallet en el estado global
+                            final appState = Provider.of<AppState>(context, listen: false);
+                            await appState.loadWalletInfo(currentUserUid);
+                            
+                            if (!appState.hasWalletInfo()) {
                               await showDialog(
                                 context: context,
                                 builder: (alertDialogContext) {
                                   return AlertDialog(
                                     title: Text('System error'),
+                                    content: Text('No se pudo cargar la información del wallet'),
                                     actions: [
                                       TextButton(
                                         onPressed: () =>

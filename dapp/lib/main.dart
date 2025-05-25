@@ -12,6 +12,8 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'flutter_flow/nav/nav.dart';
+import 'flutter_flow/app_state.dart';
+import 'package:provider/provider.dart';
 import 'index.dart';
 
 void main() async {
@@ -128,26 +130,29 @@ class _MyAppState extends State<MyApp> {
           );
         }
         
-        // Si no está cargando, mostrar la aplicación normal
-        return MaterialApp.router(
-          debugShowCheckedModeBanner: false,
-          title: 'Reclaim',
-          localizationsDelegates: [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [Locale('en', '')],
-          theme: ThemeData(
-            brightness: Brightness.light,
-            useMaterial3: false,
+        // Si no está cargando, mostrar la aplicación normal con el provider
+        return ChangeNotifierProvider(
+          create: (context) => AppState.instance,
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            title: 'Reclaim',
+            localizationsDelegates: [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en', '')],
+            theme: ThemeData(
+              brightness: Brightness.light,
+              useMaterial3: false,
+            ),
+            darkTheme: ThemeData(
+              brightness: Brightness.dark,
+              useMaterial3: false,
+            ),
+            themeMode: _themeMode,
+            routerConfig: _router,
           ),
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: false,
-          ),
-          themeMode: _themeMode,
-          routerConfig: _router,
         );
       },
     );

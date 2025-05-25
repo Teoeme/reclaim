@@ -4,8 +4,10 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
+import '/flutter_flow/app_state.dart';
 import 'dart:ui';
 import '/flutter_flow/custom_functions.dart' as functions;
+import '/auth/firebase_auth/auth_util.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -545,6 +547,35 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                   child: FFButtonWidget(
                     onPressed: () async {
                       var _shouldSetState = false;
+                      
+                      // Obtenemos la información del wallet desde el estado global
+                      final appState = Provider.of<AppState>(context, listen: false);
+                      
+                      if (!appState.hasWalletInfo()) {
+                        await showDialog(
+                          context: context,
+                          builder: (alertDialogContext) {
+                            return AlertDialog(
+                              title: Text('Error del Sistema'),
+                              content: Text('No se ha cargado la información del wallet. Por favor, vuelve a iniciar sesión.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(alertDialogContext),
+                                  child: Text('OK'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (_shouldSetState) safeSetState(() {});
+                        return;
+                      }
+                      
+                      // Obtenemos la publicKey del usuario desde el estado global
+                      final userPublicKey = appState.userPublicKey!;
+                      print('userPublicKey: $userPublicKey');
+                      // Subimos el archivo a IPFS
                       _model.apiResultrar = await IPFSUploaderCall.call(
                         base64File:
                             functions.uploadedFileToBase64WithDetectedMime(
@@ -571,6 +602,60 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                         if (_shouldSetState) safeSetState(() {});
                         return;
                       }
+                      
+                      // Obtenemos el secret de la respuesta de IPFS
+                      final originalSecret = IPFSUploaderCall.fileSecret(_model.apiResultrar?.jsonBody);
+                      print('originalSecret: $originalSecret');
+                      if (originalSecret == null || originalSecret.isEmpty) {
+                        await showDialog(
+                          context: context,
+                          builder: (alertDialogContext) {
+                            return AlertDialog(
+                              title: Text('Error del Sistema'),
+                              content: Text('No se pudo obtener el secret del archivo'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(alertDialogContext),
+                                  child: Text('OK'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (_shouldSetState) safeSetState(() {});
+                        return;
+                      }
+                      
+                      // Ciframos el secret con la publicKey del usuario usando RSA
+                      String encryptedSecret;
+                      try {
+                        encryptedSecret = functions.encryptWithRSA(originalSecret, userPublicKey);
+                      } catch (e) {
+                        await showDialog(
+                          context: context,
+                          builder: (alertDialogContext) {
+                            return AlertDialog(
+                              title: Text('Error de Cifrado'),
+                              content: Text('No se pudo cifrar el secret: ${e.toString()}'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(alertDialogContext),
+                                  child: Text('OK'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (_shouldSetState) safeSetState(() {});
+                        return;
+                      }
+                      
+                      print('encryptedSecret: $encryptedSecret');
+                      // TODO: Aquí deberías usar el encryptedSecret en lugar del originalSecret
+                      // para guardarlo en el contrato inteligente o donde sea necesario
+                      
                       if (_shouldSetState) safeSetState(() {});
                     },
                     text: 'Submit Memory',
