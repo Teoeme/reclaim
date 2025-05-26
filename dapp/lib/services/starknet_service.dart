@@ -327,14 +327,8 @@ class StarknetService {
        print('   - typedData primaryType: ${typedDataMap['primaryType']}');
        print('   - typedData domain: ${jsonEncode(typedDataMap['domain'])}');
        
-       // Para cuentas ya desplegadas, deploymentData debe ser un mapa vacío
-       final deploymentData = <String, dynamic>{};
-       
-       // Validar que deploymentData sea un mapa válido
-       if (deploymentData is! Map<String, dynamic>) {
-         print('❌ Error: deploymentData debe ser un Map<String, dynamic>');
-         return null;
-       }
+       // Para cuentas ya desplegadas, deploymentData debe ser null
+       final deploymentData = null;
        
        print('📤 Enviando petición al endpoint /paymaster/v1/execute con:');
        print('   - userAddress: $normalizedUserAddress');
