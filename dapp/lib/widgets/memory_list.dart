@@ -33,13 +33,17 @@ class _MemoryListState extends State<MemoryList> {
         _error = null;
       });
 
+      print('🔄 Iniciando carga de memorias para: ${widget.ownerAddress}');
       final memories = await widget.memoryService.getMemoriesByOwner(widget.ownerAddress);
+      print('✅ Memorias cargadas: ${memories.length}');
       
       setState(() {
         _memories = memories;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Error al cargar memorias: $e');
+      print('Stack trace: $stackTrace');
       setState(() {
         _error = 'Error al cargar las memorias: $e';
         _isLoading = false;

@@ -54,8 +54,14 @@ class StarknetUtils {
             );
             
             if (entrypoint.isNotEmpty) {
-              final selector = Felt.fromHexString(entrypoint['selector']);
-              print('🔍 Selector encontrado para $functionName: 0x${selector.toHexString()}');
+              final selectorHex = entrypoint['selector'] as String;
+              print('🔍 Selector raw del entrypoint: $selectorHex');
+              
+              // Asegurar que el selector tenga el formato correcto
+              final cleanHex = selectorHex.startsWith('0x') ? selectorHex.substring(2) : selectorHex;
+              final selector = Felt.fromHexString('0x$cleanHex');
+              
+              print('🔍 Selector procesado para $functionName: 0x${selector.toHexString()}');
               return selector;
             }
           }

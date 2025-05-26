@@ -31,6 +31,7 @@ class _HomePageWidgetState extends State<HomePageWidget>
   late MemoryContractService _memoryService;
   bool _isInitialized = false;
   String? _ownerAddress;
+  String? _initError;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -88,8 +89,17 @@ try{
         );
         _isInitialized = true;
       });
+      
+      print('✅ Inicialización completada:');
+      print('  - Owner Address: $_ownerAddress');
+      print('  - Memory Service: ${_memoryService != null ? 'Creado' : 'No creado'}');
+      print('  - Initialized: $_isInitialized');
     } catch (e) {
       print('❌ Error al inicializar Starknet: $e');
+      setState(() {
+        _initError = 'Error al inicializar: $e';
+        _isInitialized = true; // Para mostrar el error en lugar del loading
+      });
     }
   }
 
@@ -139,14 +149,48 @@ try{
           centerTitle: true,
           elevation: 2.0,
         ),
-        body: !_isInitialized || _ownerAddress == null
+        body: !_isInitialized
             ? const Center(
                 child: CircularProgressIndicator(),
               )
-            : MemoryList(
-                memoryService: _memoryService,
-                ownerAddress: _ownerAddress!,
-        ),
+            : _initError != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: FlutterFlowTheme.of(context).error,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _initError!,
+                          textAlign: TextAlign.center,
+                          style: FlutterFlowTheme.of(context).bodyMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _isInitialized = false;
+                              _initError = null;
+                            });
+                            _initializeStarknet();
+                          },
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _ownerAddress == null
+                    ? const Center(
+                        child: Text('No se pudo obtener la dirección del propietario'),
+                      )
+                    : MemoryList(
+                        memoryService: _memoryService,
+                        ownerAddress: _ownerAddress!,
+                      ),
       ),
     );
   }
