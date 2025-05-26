@@ -82,7 +82,7 @@ const deployedContracts = {
                   type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)",
                 },
               ],
-              state_mutability: "external",
+              state_mutability: "view",
             },
             {
               type: "function",
@@ -231,7 +231,7 @@ const deployedContracts = {
                   type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)",
                 },
               ],
-              state_mutability: "external",
+              state_mutability: "view",
             },
             {
               type: "function",
@@ -305,7 +305,7 @@ const deployedContracts = {
   sepolia: {
     reclaim: {
       address:
-        "0x23398f48021e7fc236e1f57b4b332cf26c3b29b5e06697186efba134bde5650",
+        "0x556c797acae1da7833124db8846105427fdc2d9dc6b16a45fbbfc1cc93b36c1",
       abi: [
         {
           type: "impl",
@@ -380,7 +380,7 @@ const deployedContracts = {
                   type: "(core::byte_array::ByteArray, core::byte_array::ByteArray, core::felt252, core::felt252, core::felt252, core::byte_array::ByteArray)",
                 },
               ],
-              state_mutability: "external",
+              state_mutability: "view",
             },
             {
               type: "function",
@@ -448,7 +448,7 @@ const deployedContracts = {
         },
       ],
       classHash:
-        "0x4ad2de1136dfb6ba7f3b35d74d4306dc0eda06ff92e2ddf8a0e8e16e3e074a2",
+        "0x1c0b2e8a73fbacb38cfe0a62903796d7ef784c48ea3fc192a8786be225b3fa3",
     },
   },
 } as const;

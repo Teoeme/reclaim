@@ -9,7 +9,7 @@ pub trait IReclaim<TContractState> {
         access_type: felt252,
         name: ByteArray
     );
-    fn reclaim(ref self: TContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252, felt252, ByteArray);
+    fn reclaim(self: @TContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252, felt252, ByteArray);
     fn get_records_by_owner(self: @TContractState, owner: felt252) -> Array<(ByteArray, felt252, felt252, felt252, ByteArray)>;
 }
 
@@ -116,13 +116,13 @@ pub mod reclaim {
             self.emit(Event::MetadataSaved(MetadataSaved { hash_commit: truncated_hash, unlock_timestamp }));
         }
     
-        fn reclaim(ref self: ContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252, felt252, ByteArray) {
+        fn reclaim(self: @ContractState, hash_commit: ByteArray) -> (ByteArray, ByteArray, felt252, felt252, felt252, ByteArray) {
             let truncated_hash: felt252 = InternalFunctions::truncate_hash(hash_commit);
             let record = self.records.entry(truncated_hash).read();
             assert(record.hash_commit != 0, 'R: Record not found');
             assert(get_block_timestamp() >= record.unlock_timestamp.try_into().unwrap(), 'R: File still locked');
 
-            self.emit(Event::FileReclaimed(FileReclaimed { hash_commit: truncated_hash }));
+            // self.emit(Event::FileReclaimed(FileReclaimed { hash_commit: truncated_hash }));
             (record.cipher_secret, record.cid, record.hash_commit, record.owner.into(), record.access_type, record.name)
         }
 

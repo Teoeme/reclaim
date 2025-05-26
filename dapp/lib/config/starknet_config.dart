@@ -8,7 +8,8 @@ import 'package:starknet/starknet.dart' show Felt, Account, Signer, StarknetChai
 
 class StarknetConfig {
   static const String rpcUrl = 'https://starknet-sepolia.public.blastapi.io/rpc/v0_8';
-  static const String contractAddress = '0x023398f48021e7fc236e1f57b4b332cf26c3b29b5e06697186efba134bde5650';
+  // static const String contractAddress = '0x023398f48021e7fc236e1f57b4b332cf26c3b29b5e06697186efba134bde5650';
+  static const String contractAddress = '0x556c797acae1da7833124db8846105427fdc2d9dc6b16a45fbbfc1cc93b36c1';
   
   static const List<Map<String, dynamic>> contractAbi = [
     {

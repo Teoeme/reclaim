@@ -1,10 +1,13 @@
 import 'package:starknet/starknet.dart' hide Signer;
 import 'package:starknet/starknet.dart' as starknet show Signer;
 import 'package:avnu_provider/avnu_provider.dart';
+import 'package:starknet_provider/starknet_provider.dart' show FunctionCall, BlockId;
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '/config/starknet_config.dart';
+import '/utils/starknet_utils.dart';
 
 class StarknetService {
   late final AvnuJsonRpcProvider avnuProvider;
@@ -67,9 +70,35 @@ class StarknetService {
       print('- unlockTimestampHex: $unlockTimestampHex');
       print('- memoryName: $memoryName');
       
-      // hash_commit del IPFS (ByteArray)
-      final hashCommitByteArray = _stringToByteArray(hashCommit);
-      print('hashCommitByteArray: $hashCommitByteArray');
+      // Limpiar el hash_commit
+      String cleanHashCommit;
+      if (hashCommit.startsWith('0x')) {
+        // Si empieza con 0x, remover ese prefijo
+        cleanHashCommit = hashCommit.substring(2);
+        print('  - hashCommit limpio (removido 0x): $cleanHashCommit');
+      } else {
+        cleanHashCommit = hashCommit;
+        print('  - hashCommit limpio (sin cambios): $cleanHashCommit');
+      }
+
+      // Convertir el hash hexadecimal a UTF-8
+      print('  - hashCommit original en hex: $cleanHashCommit');
+      
+      // Convertir cada par de caracteres hexadecimales a bytes
+      final bytes = <int>[];
+      for (int i = 0; i < cleanHashCommit.length; i += 2) {
+        final hexPair = cleanHashCommit.substring(i, i + 2);
+        final byte = int.parse(hexPair, radix: 16);
+        bytes.add(byte);
+      }
+      
+      // Convertir los bytes a string UTF-8
+      final hashCommitString = String.fromCharCodes(bytes);
+      print('  - hashCommit convertido a UTF-8: $hashCommitString');
+
+      // Convertir el hash_commit a ByteArray
+      final hashCommitByteArray = _stringToByteArray(hashCommitString);
+      print('  - hashCommitByteArray: $hashCommitByteArray');
       
       // cipher_secret (encryptedSecret) (ByteArray)
       final encryptedSecretByteArray = _stringToByteArray(encryptedSecret);
@@ -821,107 +850,89 @@ class StarknetService {
     print('Test felt252 para "timestamp": $testAccessType');
   }
 
-  /// Reclama una memoria usando AVNU gasless
-  Future<String?> reclaimMemory({
+  /// Reclama una memoria usando una llamada simple al contrato
+  Future<ReclaimResult?> reclaimMemory({
     required String userAddress,
     required String hashCommit,
     required String encryptedPrivateKey,
     required String userPublicKey,
   }) async {
     try {
+      print('🔍 Iniciando reclaimMemory con:');
+      print('  - userAddress: $userAddress');
+      print('  - hashCommit original: $hashCommit');
+      
       // Validar que todos los parámetros requeridos estén presentes
-      if (userAddress.isEmpty || 
-          hashCommit.isEmpty || 
-          encryptedPrivateKey.isEmpty ||
-          userPublicKey.isEmpty) {
-        print('Error: Parámetros requeridos faltantes');
-        return null;
-      }
-      
-      // Descifrar la clave privada usando la función de custom_functions
-      final hashSecret = FFDevEnvironmentValues().HashSecret;
-      String decryptedPrivateKey;
-      
-      try {
-        print('🔐 Hash secret: $hashSecret');
-        decryptedPrivateKey = functions.decryptWithAES(encryptedPrivateKey, hashSecret);
-        print('🔐 Private key desencriptada exitosamente: $decryptedPrivateKey');
-      } catch (e) {
-        print('Error: No se pudo descifrar la clave privada: $e');
+      if (userAddress.isEmpty || hashCommit.isEmpty) {
+        print('❌ Error: Parámetros requeridos faltantes');
         return null;
       }
 
-      // Preparar los datos para el contrato usando el formato ByteArray correcto
-      print('Preparando calldata con:');
-      print('- hashCommit: $hashCommit');
-      
-      // hash_commit del IPFS (ByteArray)
-      final hashCommitByteArray = _stringToByteArray(hashCommit);
-      print('hashCommitByteArray: $hashCommitByteArray');
-      
-      // Construir calldata completo en el orden correcto
-      final calldata = <String>[];
-      calldata.addAll(hashCommitByteArray);
-      
-      print('calldata final: $calldata');
-      
-      final calls = [
-        {
-          'contractAddress': FFDevEnvironmentValues().ContractAddress,
-          'entrypoint': 'reclaim',
-          'calldata': calldata,
-        }
+      // Limpiar el hash_commit
+      String cleanHashCommit;
+      if (hashCommit.startsWith('0x')) {
+        // Si empieza con 0x, remover ese prefijo
+        cleanHashCommit = hashCommit.substring(2);
+        print('  - hashCommit limpio (removido 0x): $cleanHashCommit');
+      } else {
+        cleanHashCommit = hashCommit;
+        print('  - hashCommit limpio (sin cambios): $cleanHashCommit');
+      }
+
+      // Construir el ByteArray manualmente
+      final hashCommitByteArray = <String>[
+        '0x1', // longitud del array (1 chunk)
+        '0x${cleanHashCommit}', // el hash completo como un chunk
+        '0x0', // pending_word
+        '0x0'  // pending_len
       ];
+      print('  - hashCommitByteArray: $hashCommitByteArray');
 
-      // Obtener el class hash de la cuenta del usuario
-      String accountClassHash;
+      // Obtener el provider configurado
+      final provider = StarknetConfig.getProvider();
+
+      // Obtener el selector de la función
+      Felt selector;
       try {
-        // Intentar obtener el class hash usando una llamada HTTP directa
-        accountClassHash = await _getAccountClassHash(userAddress);
-        print('✅ Class hash obtenido dinámicamente: $accountClassHash');
+        selector = await StarknetUtils.getFunctionSelector(
+          provider,
+          StarknetConfig.contractAddress,
+          'reclaim',
+        );
       } catch (e) {
-        print('⚠️ No se pudo obtener class hash dinámicamente, usando Argent por defecto: $e');
-        // Fallback a class hash conocido de Argent
-        accountClassHash = '0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003';
-        print('Usando class hash de Argent por defecto: $accountClassHash');
+        selector = Felt.fromHexString('0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e');
       }
-      
-      // Construir typed data usando AVNU Provider
-      print('Construyendo typed data con:');
-      print('- userAddress: $userAddress');
-      print('- calls: ${jsonEncode(calls)}');
-      print('- accountClassHash: $accountClassHash');
-      
-      final buildTypedDataResult = await avnuProvider.buildTypedData(
-        userAddress,
-        calls,
-        '', // gasTokenAddress vacío para usar rewards
-        '', // maxGasTokenAmount vacío para usar rewards
-        accountClassHash,
+
+      // Hacer la llamada al contrato usando el provider
+      final result = await provider.call(
+        request: FunctionCall(
+          contractAddress: Felt.fromHexString(StarknetConfig.contractAddress),
+          entryPointSelector: selector,
+          calldata: hashCommitByteArray.map((e) => Felt.fromHexString(e)).toList(),
+        ),
+        blockId: BlockId.latest,
       );
 
-      print('Typed data construido exitosamente');
-      print('- Domain: ${jsonEncode(buildTypedDataResult.domain.toJson())}');
-      print('- Types: ${jsonEncode(buildTypedDataResult.types)}');
-      print('- PrimaryType: ${buildTypedDataResult.primaryType}');
-      print('- Message: ${jsonEncode(buildTypedDataResult.message.toJson())}');
-      
-      // Generar la firma usando la clave privada descifrada
-      final signature = await _generateSignature(buildTypedDataResult, decryptedPrivateKey, userAddress);
-      
-      if (signature != null) {
-        // Ejecutar la transacción usando AVNU Provider
-        final result = await _executeTransaction(userAddress, buildTypedDataResult, signature);
-        if (result == null) {
-          print('❌ Error: La transacción no devolvió un hash');
+      return result.when(
+        result: (data) {
+          print('✅ Resultado de la llamada al contrato:');
+          print('  - Result: $data');
+          
+          // Parsear el resultado usando la nueva función
+          try {
+            final reclaimResult = parseReclaimResult(data);
+            print('✅ Reclaim result parseado exitosamente');
+            return reclaimResult;
+          } catch (e) {
+            print('❌ Error parseando reclaim result: $e');
+            return null;
+          }
+        },
+        error: (error) {
+          print('❌ Error al llamar el contrato: $error');
           return null;
-        }
-        print('✅ Transacción exitosa con hash: $result');
-        return result;
-      } else {
-        print('❌ Error generando la firma');
-        return null;
-      }
+        },
+      );
     } catch (e) {
       print('❌ Error en reclaimMemory: $e');
       print('Stack trace: ${StackTrace.current}');
