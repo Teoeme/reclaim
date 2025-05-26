@@ -59,7 +59,7 @@ class StarknetService {
       // Convertir timestamp a hex
       final unlockTimestampHex = '0x${(unlockTimestamp.millisecondsSinceEpoch ~/ 1000).toRadixString(16)}';
       
-      // Preparar los datos para el contrato con información real
+      // Preparar los datos para el contrato usando el formato ByteArray correcto
       print('Preparando calldata con:');
       print('- hashCommit: $hashCommit');
       print('- encryptedSecret: $encryptedSecret');
@@ -67,35 +67,33 @@ class StarknetService {
       print('- unlockTimestampHex: $unlockTimestampHex');
       print('- memoryName: $memoryName');
       
-      final calldata = <String>[];
-      
-      // hash_commit del IPFS (ByteArray) - tratar como string normal
+      // hash_commit del IPFS (ByteArray)
       final hashCommitByteArray = _stringToByteArray(hashCommit);
       print('hashCommitByteArray: $hashCommitByteArray');
-      calldata.addAll(hashCommitByteArray);
       
       // cipher_secret (encryptedSecret) (ByteArray)
       final encryptedSecretByteArray = _stringToByteArray(encryptedSecret);
       print('encryptedSecretByteArray: $encryptedSecretByteArray');
-      calldata.addAll(encryptedSecretByteArray);
       
       // cid del IPFS (ByteArray)
       final cidByteArray = _stringToByteArray(cid);
       print('cidByteArray: $cidByteArray');
-      calldata.addAll(cidByteArray);
-      
-      // unlock_timestamp del formulario (felt252)
-      print('unlockTimestampHex: $unlockTimestampHex');
-      calldata.add(unlockTimestampHex);
       
       // access_type (felt252) - convertir "timestamp" a felt252
       final accessTypeFelt = _stringToFelt252('timestamp');
       print('accessTypeFelt: $accessTypeFelt');
-      calldata.add(accessTypeFelt);
       
       // name del formulario (ByteArray)
       final nameByteArray = _stringToByteArray(memoryName);
       print('nameByteArray: $nameByteArray');
+      
+      // Construir calldata completo en el orden correcto
+      final calldata = <String>[];
+      calldata.addAll(hashCommitByteArray);
+      calldata.addAll(encryptedSecretByteArray);
+      calldata.addAll(cidByteArray);
+      calldata.add(unlockTimestampHex);
+      calldata.add(accessTypeFelt);
       calldata.addAll(nameByteArray);
       
       print('calldata final: $calldata');
@@ -104,20 +102,7 @@ class StarknetService {
         {
           'contractAddress': FFDevEnvironmentValues().ContractAddress,
           'entrypoint': 'save_metadata',
-          'calldata': [
-            // hash_commit del IPFS
-            hashCommit,
-            // cipher_secret (encryptedSecret)
-            _stringToHex(encryptedSecret),
-            // cid del IPFS
-            _stringToHex(cid),
-            // unlock_timestamp del formulario
-            unlockTimestamp,
-            // access_type (string "timestamp")
-            'timestamp',
-            // name del formulario
-            _stringToHex(memoryName),
-          ]
+          'calldata': calldata,
         }
       ];
 
