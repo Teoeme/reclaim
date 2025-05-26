@@ -4,6 +4,7 @@ import 'package:avnu_provider/avnu_provider.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class StarknetService {
   late final AvnuJsonRpcProvider avnuProvider;
@@ -105,9 +106,18 @@ class StarknetService {
         }
       ];
 
-      // Usar class hash conocido de Argent (el método getClassHashAt no está disponible en AVNU provider)
-      final accountClassHash = '0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003';
-      print('Usando class hash de Argent: $accountClassHash');
+      // Obtener el class hash de la cuenta del usuario
+      String accountClassHash;
+      try {
+        // Intentar obtener el class hash usando una llamada HTTP directa
+        accountClassHash = await _getAccountClassHash(userAddress);
+        print('✅ Class hash obtenido dinámicamente: $accountClassHash');
+      } catch (e) {
+        print('⚠️ No se pudo obtener class hash dinámicamente, usando Argent por defecto: $e');
+        // Fallback a class hash conocido de Argent
+        accountClassHash = '0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003';
+        print('Usando class hash de Argent por defecto: $accountClassHash');
+      }
       
       // Construir typed data usando AVNU Provider
       print('Construyendo typed data con:');
@@ -144,8 +154,6 @@ class StarknetService {
       return null;
     }
   }
-
-
 
   /// Generar firma usando la clave privada descifrada y Starknet
   Future<List<String>?> _generateSignature(
@@ -199,40 +207,59 @@ class StarknetService {
       // Generar el hash del mensaje
       BigInt messageHash;
       try {
-        messageHash = getMessageHash(typedDataObject, Felt.fromHexString(userAddress).toBigInt());
-        print('Message hash generado exitosamente: 0x${messageHash.toRadixString(16)}');
+        final userAddressFelt = Felt.fromHexString(userAddress).toBigInt();
+        print('🔍 User address como BigInt: 0x${userAddressFelt.toRadixString(16)}');
+        
+        messageHash = getMessageHash(typedDataObject, userAddressFelt);
+        print('✅ Message hash generado exitosamente: 0x${messageHash.toRadixString(16)}');
+        
+        // Validar que el message hash sea válido
+        if (messageHash == BigInt.zero) {
+          print('❌ Error: Message hash es cero, esto indica un problema');
+          return null;
+        }
       } catch (e) {
-        print('Error generando message hash: $e');
+        print('❌ Error generando message hash: $e');
+        print('📋 User address: $userAddress');
+        print('📋 TypedData map: ${jsonEncode(typedDataMap)}');
         return null;
       }
       
       // Firmar el hash
       dynamic signature;
       try {
+        print('🔐 Iniciando proceso de firma...');
+        print('🔐 Private key (primeros 8 chars): ${privateKey.toRadixString(16).substring(0, 8)}...');
+        print('🔐 Message hash: 0x${messageHash.toRadixString(16)}');
+        
         signature = starknetSign(
           privateKey: privateKey,
           messageHash: messageHash,
           seed: BigInt.from(32),
         );
-        print('Firma generada exitosamente - r: 0x${signature.r.toRadixString(16)}, s: 0x${signature.s.toRadixString(16)}');
+        
+        print('✅ Firma generada exitosamente:');
+        print('   - r: 0x${signature.r.toRadixString(16)}');
+        print('   - s: 0x${signature.s.toRadixString(16)}');
+        
+        // Validar que los componentes de la firma no sean cero
+        if (signature.r == BigInt.zero || signature.s == BigInt.zero) {
+          print('❌ Error: Componentes de firma inválidos (r o s es cero)');
+          return null;
+        }
       } catch (e) {
-        print('Error firmando: $e');
+        print('❌ Error firmando: $e');
+        print('📋 Stack trace: ${StackTrace.current}');
         return null;
       }
       
-      // Formatear la firma según el formato esperado por AVNU
-      // Según la documentación de AVNU: [signCount, starknetSignatureId, publicKey, signatureR, signatureS]
+      // Formatear la firma según el formato esperado por cuentas Argent
+      // Para cuentas Argent, solo necesitamos los componentes r y s de la firma
       final signatureR = Felt(signature.r).toHexString();
       final signatureS = Felt(signature.s).toHexString();
       
-      // Obtener la clave pública del usuario
-      final userPublicKey = _getPublicKeyFromPrivate(privateKey);
-      
-      // Formato correcto para AVNU según documentación
+      // Formato correcto para cuentas Argent: solo [r, s]
       final formattedSignature = [
-        '0x1', // signCount (número de firmas)
-        '0x0', // starknetSignatureId (tipo de firma Starknet)
-        userPublicKey, // clave pública del usuario
         signatureR, // componente R de la firma
         signatureS, // componente S de la firma
       ];
@@ -253,13 +280,38 @@ class StarknetService {
     AvnuBuildTypedData typedData,
     List<String> signature,
   ) async {
+    // Validar y normalizar userAddress antes del try-catch
+    if (userAddress.isEmpty) {
+      print('❌ Error: userAddress está vacío');
+      return null;
+    }
+    
+    if (!_isValidStarknetAddress(userAddress)) {
+      print('❌ Error: userAddress no es válido: $userAddress');
+      return null;
+    }
+    
+    // Normalizar la dirección para asegurar formato consistente
+    final normalizedUserAddress = _normalizeStarknetAddress(userAddress);
+    print('📍 Dirección normalizada: $userAddress -> $normalizedUserAddress');
+    
     try {
-      // typedData ya está validado por el tipo, no puede ser null
       
-      // Convertir typed data a JSON string limpio
+      // Validar que la firma tenga el formato correcto para cuentas Argent
+      if (!_isValidAvnuSignature(signature)) {
+        print('❌ Error: Firma no válida para cuenta Argent');
+        return null;
+      }
+      
+      // Procesar typed data siguiendo exactamente el patrón de la documentación AVNU
       final String typedDataJson = jsonEncode(typedData.toJson());
-      print('🔍 typedDataJson generado: ${typedDataJson.substring(0, 200)}...');
+      print('🔍 typedData inicial: ${typedDataJson.substring(0, 200)}...');
       
+      // Crear TypedData object para validación
+      final typedDataObject = TypedData.fromJson(jsonDecode(typedDataJson));
+      print('✅ TypedData object creado exitosamente');
+      
+      // Remove null fields from typedData and remove runtimeType field (siguiendo documentación)
       final Map<String, dynamic> typedDataMap = jsonDecode(typedDataJson);
       _removeNullFields(typedDataMap);
       typedDataMap.remove('runtimeType');
@@ -267,115 +319,111 @@ class StarknetService {
       
       print('🧹 cleanTypedData después de limpiar: ${cleanTypedData.substring(0, 200)}...');
       
-      print('Ejecutando transacción con:');
-      print('- userAddress: $userAddress');
-      print('- signature length: ${signature.length}');
-      print('- signature: $signature');
-      print('- cleanTypedData length: ${cleanTypedData.length}');
-      
-      // Validar que la firma tenga el formato correcto para AVNU
-      if (signature.length != 5) {
-        print('Error: La firma debe tener exactamente 5 elementos para AVNU (signCount, signatureId, publicKey, r, s), pero tiene ${signature.length}');
-        return null;
-      }
-      
-      // Validar que los elementos de la firma sean válidos
-      for (int i = 0; i < signature.length; i++) {
-        if (!signature[i].startsWith('0x')) {
-          print('Error: Elemento de firma $i no tiene formato hexadecimal: ${signature[i]}');
-          return null;
-        }
-        try {
-          BigInt.parse(signature[i].substring(2), radix: 16);
-        } catch (e) {
-          print('Error: Elemento de firma $i no es un hexadecimal válido: ${signature[i]}');
-          return null;
-        }
-      }
-      
-      // Validar que todos los parámetros requeridos no sean null
-      if (userAddress.isEmpty) {
-        print('Error: userAddress está vacío');
-        return null;
-      }
-      
-      if (cleanTypedData.isEmpty) {
-        print('Error: cleanTypedData está vacío');
-        return null;
-      }
-      
-      if (signature.isEmpty) {
-        print('Error: signature está vacía');
-        return null;
-      }
-      
-      // Validar que cleanTypedData sea JSON válido
-      try {
-        jsonDecode(cleanTypedData);
-      } catch (e) {
-        print('Error: cleanTypedData no es JSON válido: $e');
-        return null;
-      }
-      
-      print('🚀 Ejecutando transacción con AVNU Provider...');
-      print('📋 Parámetros validados:');
-      print('   - userAddress: $userAddress');
-      print('   - cleanTypedData: ${cleanTypedData.substring(0, 100)}...');
-      print('   - signature: $signature');
-      
-      // Ejecutar usando AVNU Provider
-      // Para cuentas ya desplegadas, deploymentData puede ser un mapa vacío
-      final deploymentData = <String, dynamic>{};
-      
-      final executeResult = await avnuProvider.execute(
-        userAddress,
-        cleanTypedData,
-        signature,
-        deploymentData,
-      );
+             print('🚀 Ejecutando transacción con AVNU Provider...');
+       print('📋 Parámetros validados:');
+       print('   - userAddress: $normalizedUserAddress');
+       print('   - signature: $signature');
+       print('   - cleanTypedData length: ${cleanTypedData.length}');
+       print('   - typedData primaryType: ${typedDataMap['primaryType']}');
+       print('   - typedData domain: ${jsonEncode(typedDataMap['domain'])}');
+       
+       // Para cuentas ya desplegadas, deploymentData debe ser un mapa vacío
+       final deploymentData = <String, dynamic>{};
+       
+       // Validar que deploymentData sea un mapa válido
+       if (deploymentData is! Map<String, dynamic>) {
+         print('❌ Error: deploymentData debe ser un Map<String, dynamic>');
+         return null;
+       }
+       
+       print('📤 Enviando petición al endpoint /paymaster/v1/execute con:');
+       print('   - userAddress: $normalizedUserAddress');
+       print('   - typedData: ${cleanTypedData.substring(0, 100)}...');
+       print('   - signature: $signature');
+       print('   - deploymentData: $deploymentData');
+       
+       final executeResult = await avnuProvider.execute(
+         normalizedUserAddress,
+         cleanTypedData,
+         signature,
+         deploymentData,
+       );
 
+      // Validar que executeResult no sea null
+      if (executeResult == null) {
+        print('❌ Error: executeResult es null');
+        return null;
+      }
+      
       // Validar que transactionHash no sea vacío
       if (executeResult.transactionHash.isEmpty) {
-        print('Error: transactionHash está vacío en executeResult');
+        print('❌ Error: transactionHash está vacío en executeResult');
         print('executeResult completo: $executeResult');
         return null;
       }
       
       print('✅ Transacción ejecutada exitosamente: ${executeResult.transactionHash}');
       return executeResult.transactionHash;
-          } catch (e) {
-        print('Error en _executeTransaction: $e');
-        print('Tipo de error: ${e.runtimeType}');
+      
+    } catch (e) {
+      print('❌ Error en _executeTransaction: $e');
+      print('🔍 Tipo de error: ${e.runtimeType}');
+      
+      // Analizar errores específicos de AVNU/Argent
+      final errorString = e.toString();
+      
+      if (errorString.contains('400')) {
+        print('❌ Error 400 Bad Request - Parámetros inválidos enviados al paymaster');
+        print('💡 Posibles causas:');
+        print('   - Formato incorrecto del userAddress');
+        print('   - Estructura inválida del typedData');
+        print('   - Firma con formato incorrecto');
+        print('   - deploymentData con estructura incorrecta');
         
-        // Analizar errores específicos de AVNU/Argent
-        final errorString = e.toString();
-        if (errorString.contains('argent/multicall-failed')) {
-          print('❌ Error específico de Argent multicall - posible problema con la firma o el formato de la transacción');
-        }
-        if (errorString.contains('argent/invalid-signature-length')) {
-          print('❌ Error específico de Argent - longitud de firma inválida');
-          print('💡 Sugerencia: Verificar que la firma tenga exactamente 2 elementos (r, s)');
-        }
-        if (errorString.contains('ENTRYPOINT_FAILED')) {
-          print('❌ Error de entrypoint - la función del contrato falló');
-        }
-        if (errorString.contains('500')) {
-          print('❌ Error 500 del servidor AVNU - problema interno del servicio');
-        }
+                 // Imprimir detalles adicionales para debugging
+         print('🔍 Detalles de debugging:');
+         print('   - userAddress original: $userAddress');
+         print('   - userAddress normalizada: $normalizedUserAddress');
+         print('   - userAddress length: ${normalizedUserAddress.length}');
+         print('   - signature length: ${signature.length}');
+         print('   - userAddress starts with 0x: ${normalizedUserAddress.startsWith('0x')}');
         
-        // Intentar extraer más información del error
-        if (errorString.contains('revertError')) {
-          final revertStart = errorString.indexOf('revertError');
-          final revertEnd = errorString.indexOf('}', revertStart);
-          if (revertEnd > revertStart) {
-            final revertInfo = errorString.substring(revertStart, revertEnd + 1);
-            print('📋 Información de revert: $revertInfo');
-          }
+        // Validar cada elemento de la firma
+        for (int i = 0; i < signature.length; i++) {
+          print('   - signature[$i]: ${signature[i]} (length: ${signature[i].length})');
         }
-        
-        print('Stack trace: ${StackTrace.current}');
-        return null;
       }
+      
+      if (errorString.contains('argent/multicall-failed')) {
+        print('❌ Error específico de Argent multicall - posible problema con la firma o el formato de la transacción');
+      }
+      
+      if (errorString.contains('argent/invalid-signature-length')) {
+        print('❌ Error específico de Argent - longitud de firma inválida');
+        print('💡 Sugerencia: Verificar que la firma tenga exactamente 5 elementos (signCount, signatureId, publicKey, r, s)');
+      }
+      
+      if (errorString.contains('ENTRYPOINT_FAILED')) {
+        print('❌ Error de entrypoint - la función del contrato falló');
+      }
+      
+      if (errorString.contains('500')) {
+        print('❌ Error 500 del servidor AVNU - problema interno del servicio');
+      }
+      
+      // Intentar extraer más información del error
+      if (errorString.contains('revertError')) {
+        final revertStart = errorString.indexOf('revertError');
+        final revertEnd = errorString.indexOf('}', revertStart);
+        if (revertEnd > revertStart) {
+          final revertInfo = errorString.substring(revertStart, revertEnd + 1);
+          print('📋 Información de revert: $revertInfo');
+        }
+      }
+      
+      print('📚 Stack trace: ${StackTrace.current}');
+      return null;
+    }
   }
 
   /// Convertir string a hexadecimal
@@ -493,7 +541,24 @@ class StarknetService {
     }
   }
 
-  /// Remover campos nulos de un mapa recursivamente
+  /// Función removeNullFields según documentación AVNU
+  void removeNullFields(Map<String, dynamic> map) {
+    map.removeWhere((key, value) => value == null);
+    map.forEach((key, value) {
+      if (value is Map<String, dynamic>) {
+        removeNullFields(value);
+      } else if (value is List) {
+        value.removeWhere((item) => item == null);
+        for (var item in value) {
+          if (item is Map<String, dynamic>) {
+            removeNullFields(item);
+          }
+        }
+      }
+    });
+  }
+
+  /// Remover campos nulos de un mapa recursivamente (versión extendida)
   void _removeNullFields(Map<String, dynamic> map) {
     // Crear una lista de claves a remover para evitar modificar el mapa durante la iteración
     final keysToRemove = <String>[];
@@ -501,36 +566,61 @@ class StarknetService {
     map.forEach((key, value) {
       if (value == null) {
         keysToRemove.add(key);
+        print('🧹 Removiendo campo nulo: $key');
       } else if (value is Map<String, dynamic>) {
         _removeNullFields(value);
         // Si el mapa queda vacío después de limpiar, también lo removemos
         if (value.isEmpty) {
           keysToRemove.add(key);
+          print('🧹 Removiendo mapa vacío: $key');
         }
       } else if (value is List) {
         // Limpiar elementos nulos de la lista
+        final originalLength = value.length;
         value.removeWhere((item) => item == null);
+        if (value.length != originalLength) {
+          print('🧹 Removidos ${originalLength - value.length} elementos nulos de la lista: $key');
+        }
+        
         // Limpiar mapas dentro de la lista
         for (var item in value) {
           if (item is Map<String, dynamic>) {
             _removeNullFields(item);
           }
         }
+        
         // Si la lista queda vacía, la removemos
         if (value.isEmpty) {
           keysToRemove.add(key);
+          print('🧹 Removiendo lista vacía: $key');
         }
       } else if (value is String) {
+        // Validar strings vacíos
+        if (value.isEmpty) {
+          keysToRemove.add(key);
+          print('🧹 Removiendo string vacío: $key');
+        }
         // Validar que los strings hexadecimales sean válidos
-        if (value.startsWith('0x')) {
-          try {
-            // Intentar parsear como BigInt para validar
-            BigInt.parse(value.substring(2), radix: 16);
-          } catch (e) {
-            print('Valor hexadecimal inválido encontrado: $key = $value');
-            // Convertir a 0x0 si es inválido
+        else if (value.startsWith('0x')) {
+          if (value.length < 3) {
+            print('⚠️ Valor hexadecimal muy corto: $key = $value, convirtiendo a 0x0');
             map[key] = '0x0';
+          } else {
+            try {
+              // Intentar parsear como BigInt para validar
+              BigInt.parse(value.substring(2), radix: 16);
+            } catch (e) {
+              print('⚠️ Valor hexadecimal inválido encontrado: $key = $value, convirtiendo a 0x0');
+              // Convertir a 0x0 si es inválido
+              map[key] = '0x0';
+            }
           }
+        }
+      } else if (value is num) {
+        // Validar números
+        if (value.isNaN || value.isInfinite) {
+          keysToRemove.add(key);
+          print('🧹 Removiendo número inválido: $key = $value');
         }
       }
     });
@@ -538,6 +628,113 @@ class StarknetService {
     // Remover todas las claves marcadas
     for (final key in keysToRemove) {
       map.remove(key);
+      print('🗑️ Campo removido: $key');
+    }
+  }
+
+  /// Validar formato de dirección de Starknet
+  bool _isValidStarknetAddress(String address) {
+    try {
+      // Debe empezar con 0x
+      if (!address.startsWith('0x')) {
+        print('❌ Dirección debe empezar con 0x: $address');
+        return false;
+      }
+      
+      // Remover el prefijo 0x
+      final hexPart = address.substring(2);
+      
+      // Debe tener entre 1 y 64 caracteres hexadecimales (felt252 máximo)
+      if (hexPart.isEmpty || hexPart.length > 64) {
+        print('❌ Dirección tiene longitud inválida: ${hexPart.length} (debe ser 1-64)');
+        return false;
+      }
+      
+      // Debe ser hexadecimal válido
+      BigInt.parse(hexPart, radix: 16);
+      
+      // Validar que no sea 0x0 (dirección inválida)
+      if (address == '0x0' || address == '0x00') {
+        print('❌ Dirección no puede ser 0x0');
+        return false;
+      }
+      
+      print('✅ Dirección válida: $address');
+      return true;
+    } catch (e) {
+      print('❌ Error validando dirección $address: $e');
+      return false;
+    }
+  }
+
+  /// Normalizar dirección de Starknet (asegurar formato correcto)
+  String _normalizeStarknetAddress(String address) {
+    try {
+      if (!address.startsWith('0x')) {
+        address = '0x$address';
+      }
+      
+      // Parsear y volver a formatear para normalizar
+      final hexPart = address.substring(2);
+      final bigIntValue = BigInt.parse(hexPart, radix: 16);
+      
+      // Convertir de vuelta a hex sin ceros innecesarios al inicio
+      return '0x${bigIntValue.toRadixString(16)}';
+    } catch (e) {
+      print('❌ Error normalizando dirección $address: $e');
+      return address; // Retornar original si hay error
+    }
+  }
+
+  /// Validar formato de firma para cuentas Argent
+  bool _isValidAvnuSignature(List<String> signature) {
+    try {
+      // Cuentas Argent requieren exactamente 2 elementos: [r, s]
+      if (signature.length != 2) {
+        print('❌ Firma debe tener exactamente 2 elementos, tiene: ${signature.length}');
+        return false;
+      }
+      
+      // Validar cada elemento
+      for (int i = 0; i < signature.length; i++) {
+        final element = signature[i];
+        
+        // Debe empezar con 0x
+        if (!element.startsWith('0x')) {
+          print('❌ Elemento de firma $i debe empezar con 0x: $element');
+          return false;
+        }
+        
+        // Debe ser hexadecimal válido
+        try {
+          BigInt.parse(element.substring(2), radix: 16);
+        } catch (e) {
+          print('❌ Elemento de firma $i no es hexadecimal válido: $element');
+          return false;
+        }
+        
+        // Validaciones específicas por posición
+        switch (i) {
+          case 0: // r
+          case 1: // s
+            final hexPart = element.substring(2);
+            if (hexPart.length > 64) {
+              print('❌ Componente de firma ${i == 0 ? 'r' : 's'} muy largo: ${hexPart.length} caracteres');
+              return false;
+            }
+            if (element == '0x0') {
+              print('❌ Componente de firma ${i == 0 ? 'r' : 's'} no puede ser 0x0');
+              return false;
+            }
+            break;
+        }
+      }
+      
+      print('✅ Firma válida para cuenta Argent: $signature');
+      return true;
+    } catch (e) {
+      print('❌ Error validando firma: $e');
+      return false;
     }
   }
 
@@ -575,6 +772,44 @@ class StarknetService {
     } catch (e) {
       print('Error obteniendo precios de gas: $e');
       return null;
+    }
+  }
+
+  /// Obtener el class hash de una cuenta usando llamada HTTP directa
+  Future<String> _getAccountClassHash(String accountAddress) async {
+    try {
+      // Hacer una llamada HTTP directa al RPC de Starknet
+      final response = await http.post(
+        Uri.parse('https://starknet-sepolia.public.blastapi.io/rpc/v0_8'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'jsonrpc': '2.0',
+          'method': 'starknet_getClassHashAt',
+          'params': [
+            'latest',
+            accountAddress,
+          ],
+          'id': 1,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['result'] != null) {
+          final classHash = responseData['result'] as String;
+          print('✅ Class hash obtenido: $classHash');
+          return classHash;
+        } else if (responseData['error'] != null) {
+          throw Exception('Error RPC: ${responseData['error']}');
+        }
+      }
+      
+      throw Exception('Error HTTP: ${response.statusCode}');
+    } catch (e) {
+      print('❌ Error obteniendo class hash: $e');
+      rethrow;
     }
   }
 
