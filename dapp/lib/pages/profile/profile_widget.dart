@@ -264,15 +264,24 @@ class _ProfileWidgetState extends State<ProfileWidget>
                 child: Padding(
                   padding: EdgeInsets.all(10.0),
                   child: AuthUserStreamWidget(
-                    builder: (context) => ClipRRect(
-                      borderRadius: BorderRadius.circular(50.0),
-                      child: Image.network(
-                        currentUserPhoto,
-                        width: 100.0,
-                        height: 100.0,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+                    builder: (context) {
+                      debugPrint('User photo URL: $currentUserPhoto');
+
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(50.0),
+                        child: currentUserPhoto != null && currentUserPhoto.isNotEmpty
+                            ? Image.network(
+                                currentUserPhoto,
+                                width: 100.0,
+                                height: 100.0,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(Icons.error, size: 100.0);
+                                },
+                              )
+                            : Icon(Icons.account_circle, size: 100.0, color: Colors.grey),
+                      );
+                    },
                   ),
                 ),
               ).animateOnPageLoad(animationsMap['cardOnPageLoadAnimation']!),
