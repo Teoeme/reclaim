@@ -220,14 +220,24 @@ class StarknetService {
         return null;
       }
       
-      // Formatear la firma según el formato esperado por AVNU/Argent
+      // Formatear la firma según el formato esperado por AVNU
+      // Según la documentación de AVNU: [signCount, starknetSignatureId, publicKey, signatureR, signatureS]
       final signatureR = Felt(signature.r).toHexString();
       final signatureS = Felt(signature.s).toHexString();
       
-      // Intentar con el formato simple de Argent (solo r, s)
-      final formattedSignature = [signatureR, signatureS];
+      // Obtener la clave pública del usuario
+      final userPublicKey = _getPublicKeyFromPrivate(privateKey);
       
-      print('Firma formateada para AVNU/Argent: $formattedSignature');
+      // Formato correcto para AVNU según documentación
+      final formattedSignature = [
+        '0x1', // signCount (número de firmas)
+        '0x0', // starknetSignatureId (tipo de firma Starknet)
+        userPublicKey, // clave pública del usuario
+        signatureR, // componente R de la firma
+        signatureS, // componente S de la firma
+      ];
+      
+      print('Firma formateada para AVNU (formato correcto): $formattedSignature');
       
       return formattedSignature;
     } catch (e) {
@@ -244,12 +254,18 @@ class StarknetService {
     List<String> signature,
   ) async {
     try {
+      // typedData ya está validado por el tipo, no puede ser null
+      
       // Convertir typed data a JSON string limpio
       final String typedDataJson = jsonEncode(typedData.toJson());
+      print('🔍 typedDataJson generado: ${typedDataJson.substring(0, 200)}...');
+      
       final Map<String, dynamic> typedDataMap = jsonDecode(typedDataJson);
       _removeNullFields(typedDataMap);
       typedDataMap.remove('runtimeType');
       final String cleanTypedData = jsonEncode(typedDataMap);
+      
+      print('🧹 cleanTypedData después de limpiar: ${cleanTypedData.substring(0, 200)}...');
       
       print('Ejecutando transacción con:');
       print('- userAddress: $userAddress');
@@ -257,9 +273,9 @@ class StarknetService {
       print('- signature: $signature');
       print('- cleanTypedData length: ${cleanTypedData.length}');
       
-      // Validar que la firma tenga el formato correcto para AVNU/Argent
-      if (signature.length != 2) {
-        print('Error: La firma debe tener exactamente 2 elementos para AVNU/Argent (r, s), pero tiene ${signature.length}');
+      // Validar que la firma tenga el formato correcto para AVNU
+      if (signature.length != 5) {
+        print('Error: La firma debe tener exactamente 5 elementos para AVNU (signCount, signatureId, publicKey, r, s), pero tiene ${signature.length}');
         return null;
       }
       
@@ -277,15 +293,55 @@ class StarknetService {
         }
       }
       
+      // Validar que todos los parámetros requeridos no sean null
+      if (userAddress.isEmpty) {
+        print('Error: userAddress está vacío');
+        return null;
+      }
+      
+      if (cleanTypedData.isEmpty) {
+        print('Error: cleanTypedData está vacío');
+        return null;
+      }
+      
+      if (signature.isEmpty) {
+        print('Error: signature está vacía');
+        return null;
+      }
+      
+      // Validar que cleanTypedData sea JSON válido
+      try {
+        jsonDecode(cleanTypedData);
+      } catch (e) {
+        print('Error: cleanTypedData no es JSON válido: $e');
+        return null;
+      }
+      
+      print('🚀 Ejecutando transacción con AVNU Provider...');
+      print('📋 Parámetros validados:');
+      print('   - userAddress: $userAddress');
+      print('   - cleanTypedData: ${cleanTypedData.substring(0, 100)}...');
+      print('   - signature: $signature');
+      
       // Ejecutar usando AVNU Provider
+      // Para cuentas ya desplegadas, deploymentData puede ser un mapa vacío
+      final deploymentData = <String, dynamic>{};
+      
       final executeResult = await avnuProvider.execute(
         userAddress,
         cleanTypedData,
         signature,
-        null, // deploymentData
+        deploymentData,
       );
 
-      print('Transacción ejecutada exitosamente: ${executeResult.transactionHash}');
+      // Validar que transactionHash no sea vacío
+      if (executeResult.transactionHash.isEmpty) {
+        print('Error: transactionHash está vacío en executeResult');
+        print('executeResult completo: $executeResult');
+        return null;
+      }
+      
+      print('✅ Transacción ejecutada exitosamente: ${executeResult.transactionHash}');
       return executeResult.transactionHash;
           } catch (e) {
         print('Error en _executeTransaction: $e');
