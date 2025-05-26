@@ -80,9 +80,7 @@ String encryptWithRSA(String plaintext, String publicKeyPem) {
 
 String decryptWithRSA(String encryptedText, String privateKey) {
   try {
-    print('🔐 Texto cifrado recibido: $encryptedText');
-    print('🔐 Clave privada recibida: $privateKey');
-    
+
     // Decodificar de base64
     final encryptedBytes = base64Decode(encryptedText);
     
@@ -104,10 +102,6 @@ String decryptWithRSA(String encryptedText, String privateKey) {
     digest.update(Uint8List.fromList(combinedBytes), 0, combinedBytes.length);
     digest.doFinal(calculatedHash, 0);
     
-    // Imprimir los hashes para debug
-    print('Hash recibido: ${hashBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
-    print('Hash calculado: ${calculatedHash.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
-    
     // Verificar que el hash coincide
     if (!ListEquality().equals(hashBytes, calculatedHash)) {
       throw Exception('Hash de verificación inválido');
@@ -123,13 +117,8 @@ String decryptWithRSA(String encryptedText, String privateKey) {
 
 String decryptWithAES(String encryptedText, String key) {
   try {
-    print('🔐 Descifrando con AES...');
-    print('🔐 Texto cifrado: $encryptedText');
-    print('🔐 Clave: $key');
-    
     // Decodificar el texto cifrado de base64
     final encryptedData = base64.decode(encryptedText);
-    print('🔐 Datos cifrados decodificados: ${encryptedData.length} bytes');
     
     // Verificar que comience con "Salted__" (formato CryptoJS)
     final saltedPrefix = utf8.encode('Salted__');
@@ -139,21 +128,16 @@ String decryptWithAES(String encryptedText, String key) {
     }
     
     // Extraer el salt (bytes 8-16)
-    final salt = encryptedData.sublist(8, 16);
-    print('🔐 Salt extraído: ${salt.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
+    final salt = encryptedData.sublist(8, 16);  
     
     // Extraer el texto cifrado real (después del salt)
     final cipherText = encryptedData.sublist(16);
-    print('🔐 Texto cifrado: ${cipherText.length} bytes');
     
     // Derivar clave e IV usando el mismo método que CryptoJS (MD5)
     // CryptoJS usa MD5 para derivar la clave y IV
     final keyAndIv = _deriveKeyAndIV(key, salt);
     final aesKey = keyAndIv.sublist(0, 32); // 32 bytes para AES-256
     final iv = keyAndIv.sublist(32, 48);    // 16 bytes para IV
-    
-    print('🔐 Clave derivada: ${aesKey.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
-    print('🔐 IV derivado: ${iv.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
     
     // Descifrar con AES-256-CBC usando PointyCastle directamente
     final cipher = CBCBlockCipher(AESEngine());
@@ -170,12 +154,8 @@ String decryptWithAES(String encryptedText, String key) {
     // Remover padding PKCS7
     final unpaddedBytes = _removePKCS7Padding(decryptedBytes);
     
-    print('🔐 Bytes descifrados: ${unpaddedBytes.length} bytes');
-    print('🔐 Bytes como hex: ${unpaddedBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
-    
     // Convertir a string UTF-8 (que debería ser el hex sin 0x)
     final decryptedString = utf8.decode(unpaddedBytes);
-    print('🔐 String descifrado: $decryptedString');
     
     // Agregar prefijo 0x como hace el script de Node.js
     return '0x$decryptedString';
@@ -187,9 +167,6 @@ String decryptWithAES(String encryptedText, String key) {
 
 // Función auxiliar para derivar clave e IV usando MD5 (como CryptoJS)
 Uint8List _deriveKeyAndIV(String password, Uint8List salt) {
-  print('🔑 Derivando clave e IV...');
-  print('🔑 Password: $password');
-  print('🔑 Salt: ${salt.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
   
   final passwordBytes = utf8.encode(password);
   final result = <int>[];
@@ -203,32 +180,26 @@ Uint8List _deriveKeyAndIV(String password, Uint8List salt) {
       final lastBytes = result.length >= 16 
           ? result.sublist(result.length - 16) 
           : result;
-      print('🔑 Agregando últimos bytes: ${lastBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
       md5.update(Uint8List.fromList(lastBytes), 0, lastBytes.length);
     }
     
     // Agregar password
-    print('🔑 Agregando password bytes: ${passwordBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
     md5.update(Uint8List.fromList(passwordBytes), 0, passwordBytes.length);
     
-    // Agregar salt
-    print('🔑 Agregando salt: ${salt.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
+    // Agregar salt 
     md5.update(salt, 0, salt.length);
     
     // Calcular hash
     final currentHash = Uint8List(md5.digestSize);
     md5.doFinal(currentHash, 0);
-    
-    print('🔑 Hash calculado: ${currentHash.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
+
     
     // Agregar al resultado
     result.addAll(currentHash);
-    print('🔑 Resultado acumulado: ${result.length} bytes');
   }
   
   final finalResult = Uint8List.fromList(result.take(48).toList());
-  print('🔑 Resultado final (48 bytes): ${finalResult.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
-  
+    
   return finalResult;
 }
 

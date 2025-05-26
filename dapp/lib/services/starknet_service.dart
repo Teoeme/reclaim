@@ -296,7 +296,6 @@ class StarknetService {
     print('📍 Dirección normalizada: $userAddress -> $normalizedUserAddress');
     
     try {
-      
       // Validar que la firma tenga el formato correcto para cuentas Argent
       if (!_isValidAvnuSignature(signature)) {
         print('❌ Error: Firma no válida para cuenta Argent');
@@ -319,30 +318,30 @@ class StarknetService {
       
       print('🧹 cleanTypedData después de limpiar: ${cleanTypedData.substring(0, 200)}...');
       
-             print('🚀 Ejecutando transacción con AVNU Provider...');
-       print('📋 Parámetros validados:');
-       print('   - userAddress: $normalizedUserAddress');
-       print('   - signature: $signature');
-       print('   - cleanTypedData length: ${cleanTypedData.length}');
-       print('   - typedData primaryType: ${typedDataMap['primaryType']}');
-       print('   - typedData domain: ${jsonEncode(typedDataMap['domain'])}');
-       
-       // Para cuentas ya desplegadas, deploymentData debe ser null
-       final deploymentData = null;
-       
-       print('📤 Enviando petición al endpoint /paymaster/v1/execute con:');
-       print('   - userAddress: $normalizedUserAddress');
-       print('   - typedData: ${cleanTypedData.substring(0, 100)}...');
-       print('   - signature: $signature');
-       print('   - deploymentData: $deploymentData');
-       
-       final executeResult = await avnuProvider.execute(
-         normalizedUserAddress,
-         cleanTypedData,
-         signature,
-         deploymentData,
-       );
-
+      print('🚀 Ejecutando transacción con AVNU Provider...');
+      print('📋 Parámetros validados:');
+      print('   - userAddress: $normalizedUserAddress');
+      print('   - signature: $signature');
+      print('   - cleanTypedData length: ${cleanTypedData.length}');
+      print('   - typedData primaryType: ${typedDataMap['primaryType']}');
+      print('   - typedData domain: ${jsonEncode(typedDataMap['domain'])}');
+      
+      // Para cuentas ya desplegadas, deploymentData debe ser null
+      final deploymentData = null;
+      
+      print('📤 Enviando petición al endpoint /paymaster/v1/execute con:');
+      print('   - userAddress: $normalizedUserAddress');
+      print('   - typedData: ${cleanTypedData.substring(0, 100)}...');
+      print('   - signature: $signature');
+      print('   - deploymentData: $deploymentData');
+      
+      final executeResult = await avnuProvider.execute(
+        normalizedUserAddress,
+        cleanTypedData,
+        signature,
+        deploymentData,
+      );
+      print('executeResult: $executeResult');
       // Validar que executeResult no sea null
       if (executeResult == null) {
         print('❌ Error: executeResult es null');
@@ -374,13 +373,13 @@ class StarknetService {
         print('   - Firma con formato incorrecto');
         print('   - deploymentData con estructura incorrecta');
         
-                 // Imprimir detalles adicionales para debugging
-         print('🔍 Detalles de debugging:');
-         print('   - userAddress original: $userAddress');
-         print('   - userAddress normalizada: $normalizedUserAddress');
-         print('   - userAddress length: ${normalizedUserAddress.length}');
-         print('   - signature length: ${signature.length}');
-         print('   - userAddress starts with 0x: ${normalizedUserAddress.startsWith('0x')}');
+        // Imprimir detalles adicionales para debugging
+        print('🔍 Detalles de debugging:');
+        print('   - userAddress original: $userAddress');
+        print('   - userAddress normalizada: $normalizedUserAddress');
+        print('   - userAddress length: ${normalizedUserAddress.length}');
+        print('   - signature length: ${signature.length}');
+        print('   - userAddress starts with 0x: ${normalizedUserAddress.startsWith('0x')}');
         
         // Validar cada elemento de la firma
         for (int i = 0; i < signature.length; i++) {
@@ -394,7 +393,7 @@ class StarknetService {
       
       if (errorString.contains('argent/invalid-signature-length')) {
         print('❌ Error específico de Argent - longitud de firma inválida');
-        print('💡 Sugerencia: Verificar que la firma tenga exactamente 5 elementos (signCount, signatureId, publicKey, r, s)');
+        print('💡 Sugerencia: Verificar que la firma tenga exactamente 2 elementos (r, s)');
       }
       
       if (errorString.contains('ENTRYPOINT_FAILED')) {
@@ -820,5 +819,113 @@ class StarknetService {
     
     final testAccessType = _stringToFelt252('timestamp');
     print('Test felt252 para "timestamp": $testAccessType');
+  }
+
+  /// Reclama una memoria usando AVNU gasless
+  Future<String?> reclaimMemory({
+    required String userAddress,
+    required String hashCommit,
+    required String encryptedPrivateKey,
+    required String userPublicKey,
+  }) async {
+    try {
+      // Validar que todos los parámetros requeridos estén presentes
+      if (userAddress.isEmpty || 
+          hashCommit.isEmpty || 
+          encryptedPrivateKey.isEmpty ||
+          userPublicKey.isEmpty) {
+        print('Error: Parámetros requeridos faltantes');
+        return null;
+      }
+      
+      // Descifrar la clave privada usando la función de custom_functions
+      final hashSecret = FFDevEnvironmentValues().HashSecret;
+      String decryptedPrivateKey;
+      
+      try {
+        print('🔐 Hash secret: $hashSecret');
+        decryptedPrivateKey = functions.decryptWithAES(encryptedPrivateKey, hashSecret);
+        print('🔐 Private key desencriptada exitosamente: $decryptedPrivateKey');
+      } catch (e) {
+        print('Error: No se pudo descifrar la clave privada: $e');
+        return null;
+      }
+
+      // Preparar los datos para el contrato usando el formato ByteArray correcto
+      print('Preparando calldata con:');
+      print('- hashCommit: $hashCommit');
+      
+      // hash_commit del IPFS (ByteArray)
+      final hashCommitByteArray = _stringToByteArray(hashCommit);
+      print('hashCommitByteArray: $hashCommitByteArray');
+      
+      // Construir calldata completo en el orden correcto
+      final calldata = <String>[];
+      calldata.addAll(hashCommitByteArray);
+      
+      print('calldata final: $calldata');
+      
+      final calls = [
+        {
+          'contractAddress': FFDevEnvironmentValues().ContractAddress,
+          'entrypoint': 'reclaim',
+          'calldata': calldata,
+        }
+      ];
+
+      // Obtener el class hash de la cuenta del usuario
+      String accountClassHash;
+      try {
+        // Intentar obtener el class hash usando una llamada HTTP directa
+        accountClassHash = await _getAccountClassHash(userAddress);
+        print('✅ Class hash obtenido dinámicamente: $accountClassHash');
+      } catch (e) {
+        print('⚠️ No se pudo obtener class hash dinámicamente, usando Argent por defecto: $e');
+        // Fallback a class hash conocido de Argent
+        accountClassHash = '0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003';
+        print('Usando class hash de Argent por defecto: $accountClassHash');
+      }
+      
+      // Construir typed data usando AVNU Provider
+      print('Construyendo typed data con:');
+      print('- userAddress: $userAddress');
+      print('- calls: ${jsonEncode(calls)}');
+      print('- accountClassHash: $accountClassHash');
+      
+      final buildTypedDataResult = await avnuProvider.buildTypedData(
+        userAddress,
+        calls,
+        '', // gasTokenAddress vacío para usar rewards
+        '', // maxGasTokenAmount vacío para usar rewards
+        accountClassHash,
+      );
+
+      print('Typed data construido exitosamente');
+      print('- Domain: ${jsonEncode(buildTypedDataResult.domain.toJson())}');
+      print('- Types: ${jsonEncode(buildTypedDataResult.types)}');
+      print('- PrimaryType: ${buildTypedDataResult.primaryType}');
+      print('- Message: ${jsonEncode(buildTypedDataResult.message.toJson())}');
+      
+      // Generar la firma usando la clave privada descifrada
+      final signature = await _generateSignature(buildTypedDataResult, decryptedPrivateKey, userAddress);
+      
+      if (signature != null) {
+        // Ejecutar la transacción usando AVNU Provider
+        final result = await _executeTransaction(userAddress, buildTypedDataResult, signature);
+        if (result == null) {
+          print('❌ Error: La transacción no devolvió un hash');
+          return null;
+        }
+        print('✅ Transacción exitosa con hash: $result');
+        return result;
+      } else {
+        print('❌ Error generando la firma');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error en reclaimMemory: $e');
+      print('Stack trace: ${StackTrace.current}');
+      return null;
+    }
   }
 } 

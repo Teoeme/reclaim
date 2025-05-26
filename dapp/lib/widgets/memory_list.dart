@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/starknet/memory_contract_service.dart';
+import '/flutter_flow/nav/nav.dart';
+import '/pages/unlock_memory/unlock_memory_widget.dart';
+
 
 class MemoryList extends StatefulWidget {
   final MemoryContractService memoryService;
@@ -51,16 +54,7 @@ class _MemoryListState extends State<MemoryList> {
     }
   }
 
-  String _getAccessTypeText(int accessType) {
-    switch (accessType) {
-      case 0:
-        return 'Público';
-      case 1:
-        return 'Privado';
-      default:
-        return 'Desconocido';
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -119,14 +113,37 @@ class _MemoryListState extends State<MemoryList> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Tipo de acceso: ${_getAccessTypeText(memory.accessType)}',
+                  'Tipo de acceso: ${memory.accessType}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
-            trailing: Text(
-              memory.createdAt.toString().split(' ')[0],
-              style: Theme.of(context).textTheme.bodySmall,
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${memory.createdAt.toString().split('.')[0]}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (memory.accessType == 'timestamp' && 
+                    DateTime.now().millisecondsSinceEpoch >= memory.createdAt.millisecondsSinceEpoch)
+                  TextButton(
+                    onPressed: () {
+                      context.pushNamed(
+                        UnlockMemoryWidget.routeName,
+                        extra: memory.toJson(),
+                      );
+                    },
+                    child: Text(
+                      'Desbloquear',
+                      style: TextStyle(
+                        color: Theme.of(context).primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );

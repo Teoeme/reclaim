@@ -92,13 +92,11 @@ class StarknetConfig {
       // Desencriptar la private key usando la función de custom_functions.dart
       final hashSecret = FFDevEnvironmentValues().HashSecret;
       
-      print('🔐 Hash secret: $hashSecret');
       final decryptedPrivateKey = decryptWithAES(
         encryptedPrivateKey,
         hashSecret, 
       );
 
-      print('🔐 Private key desencriptada exitosamente: $decryptedPrivateKey');
       
       // Crear el provider
       final provider = getProvider();
@@ -112,8 +110,8 @@ class StarknetConfig {
       );
       
       
-      print('👤 Cuenta integrada al provider');
-      print('🔑 Public Key: $publicKey');
+      print('👤 Cuenta integrada al provider'); 
+      print('🔑 Public Key: $publicKey'); 
 
       return account;
     } catch (e) {

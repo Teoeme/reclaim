@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:provider/provider.dart';
 import '/backend/backend.dart';
+import '/services/starknet/memory_contract_service.dart';
 
 import '/auth/base_auth_user_provider.dart';
 
@@ -16,6 +17,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'serialization_util.dart';
 
 import '/index.dart';
+import '/pages/unlock_memory/unlock_memory_widget.dart';
 
 export 'package:go_router/go_router.dart';
 export 'serialization_util.dart';
@@ -135,7 +137,14 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
                   initialPage: 'HomePage',
                   page: HomePageWidget(),
                 ),
-        )
+        ),
+        FFRoute(
+          name: UnlockMemoryWidget.routeName,
+          path: UnlockMemoryWidget.routePath,
+          builder: (context, params) => UnlockMemoryWidget(
+            memory: Memory.fromJson(params.state.extra as Map<String, dynamic>),
+          ),
+        ),
       ].map((r) => r.toRoute(appStateNotifier)).toList(),
     );
 
