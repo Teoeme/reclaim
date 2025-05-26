@@ -3,7 +3,6 @@ import 'package:starknet/starknet.dart' as starknet show Signer;
 import 'package:avnu_provider/avnu_provider.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
-import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
 class StarknetService {
@@ -106,8 +105,9 @@ class StarknetService {
         }
       ];
 
-      // Obtener el class hash de la cuenta
-      final accountClassHash = '0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003'; // ArgentX
+      // Usar class hash conocido de Argent (el método getClassHashAt no está disponible en AVNU provider)
+      final accountClassHash = '0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003';
+      print('Usando class hash de Argent: $accountClassHash');
       
       // Construir typed data usando AVNU Provider
       print('Construyendo typed data con:');
@@ -123,7 +123,11 @@ class StarknetService {
         accountClassHash,
       );
 
-      print('Typed data construido exitosamente: ${jsonEncode(buildTypedDataResult.toJson())}');
+      print('Typed data construido exitosamente');
+      print('- Domain: ${jsonEncode(buildTypedDataResult.domain.toJson())}');
+      print('- Types: ${jsonEncode(buildTypedDataResult.types)}');
+      print('- PrimaryType: ${buildTypedDataResult.primaryType}');
+      print('- Message: ${jsonEncode(buildTypedDataResult.message.toJson())}');
       
       // Generar la firma usando la clave privada descifrada
       final signature = await _generateSignature(buildTypedDataResult, decryptedPrivateKey, userAddress);
@@ -196,36 +200,36 @@ class StarknetService {
       BigInt messageHash;
       try {
         messageHash = getMessageHash(typedDataObject, Felt.fromHexString(userAddress).toBigInt());
-        print('Message hash generado exitosamente');
+        print('Message hash generado exitosamente: 0x${messageHash.toRadixString(16)}');
       } catch (e) {
         print('Error generando message hash: $e');
         return null;
       }
       
       // Firmar el hash
-      var signature;
+      dynamic signature;
       try {
         signature = starknetSign(
           privateKey: privateKey,
           messageHash: messageHash,
           seed: BigInt.from(32),
         );
-        print('Firma generada exitosamente');
+        print('Firma generada exitosamente - r: 0x${signature.r.toRadixString(16)}, s: 0x${signature.s.toRadixString(16)}');
       } catch (e) {
         print('Error firmando: $e');
         return null;
       }
       
-      // Formatear la firma según el formato esperado por AVNU
-      final signCount = "0x1";
-      final starknetSignatureId = "0x0";
-      final publicKey = _getPublicKeyFromPrivate(privateKey);
+      // Formatear la firma según el formato esperado por AVNU/Argent
       final signatureR = Felt(signature.r).toHexString();
       final signatureS = Felt(signature.s).toHexString();
       
-      print('Firma formateada exitosamente');
+      // Intentar con el formato simple de Argent (solo r, s)
+      final formattedSignature = [signatureR, signatureS];
       
-      return [signCount, starknetSignatureId, publicKey, signatureR, signatureS];
+      print('Firma formateada para AVNU/Argent: $formattedSignature');
+      
+      return formattedSignature;
     } catch (e) {
       print('Error generando firma: $e');
       print('Stack trace: ${StackTrace.current}');
@@ -249,8 +253,29 @@ class StarknetService {
       
       print('Ejecutando transacción con:');
       print('- userAddress: $userAddress');
+      print('- signature length: ${signature.length}');
       print('- signature: $signature');
-      print('- cleanTypedData: $cleanTypedData');
+      print('- cleanTypedData length: ${cleanTypedData.length}');
+      
+      // Validar que la firma tenga el formato correcto para AVNU/Argent
+      if (signature.length != 2) {
+        print('Error: La firma debe tener exactamente 2 elementos para AVNU/Argent (r, s), pero tiene ${signature.length}');
+        return null;
+      }
+      
+      // Validar que los elementos de la firma sean válidos
+      for (int i = 0; i < signature.length; i++) {
+        if (!signature[i].startsWith('0x')) {
+          print('Error: Elemento de firma $i no tiene formato hexadecimal: ${signature[i]}');
+          return null;
+        }
+        try {
+          BigInt.parse(signature[i].substring(2), radix: 16);
+        } catch (e) {
+          print('Error: Elemento de firma $i no es un hexadecimal válido: ${signature[i]}');
+          return null;
+        }
+      }
       
       // Ejecutar usando AVNU Provider
       final executeResult = await avnuProvider.execute(
@@ -262,11 +287,39 @@ class StarknetService {
 
       print('Transacción ejecutada exitosamente: ${executeResult.transactionHash}');
       return executeResult.transactionHash;
-    } catch (e) {
-      print('Error en _executeTransaction: $e');
-      print('Stack trace: ${StackTrace.current}');
-      return null;
-    }
+          } catch (e) {
+        print('Error en _executeTransaction: $e');
+        print('Tipo de error: ${e.runtimeType}');
+        
+        // Analizar errores específicos de AVNU/Argent
+        final errorString = e.toString();
+        if (errorString.contains('argent/multicall-failed')) {
+          print('❌ Error específico de Argent multicall - posible problema con la firma o el formato de la transacción');
+        }
+        if (errorString.contains('argent/invalid-signature-length')) {
+          print('❌ Error específico de Argent - longitud de firma inválida');
+          print('💡 Sugerencia: Verificar que la firma tenga exactamente 2 elementos (r, s)');
+        }
+        if (errorString.contains('ENTRYPOINT_FAILED')) {
+          print('❌ Error de entrypoint - la función del contrato falló');
+        }
+        if (errorString.contains('500')) {
+          print('❌ Error 500 del servidor AVNU - problema interno del servicio');
+        }
+        
+        // Intentar extraer más información del error
+        if (errorString.contains('revertError')) {
+          final revertStart = errorString.indexOf('revertError');
+          final revertEnd = errorString.indexOf('}', revertStart);
+          if (revertEnd > revertStart) {
+            final revertInfo = errorString.substring(revertStart, revertEnd + 1);
+            print('📋 Información de revert: $revertInfo');
+          }
+        }
+        
+        print('Stack trace: ${StackTrace.current}');
+        return null;
+      }
   }
 
   /// Convertir string a hexadecimal
