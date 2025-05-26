@@ -48,8 +48,9 @@ class StarknetService {
       String decryptedPrivateKey;
       
       try {
-        decryptedPrivateKey = functions.decryptWithRSA(encryptedPrivateKey, hashSecret);
-        print('Clave privada descifrada exitosamente');
+        print('🔐 Hash secret: $hashSecret');
+        decryptedPrivateKey = functions.decryptWithAES(encryptedPrivateKey, hashSecret);
+        print('🔐 Private key desencriptada exitosamente: $decryptedPrivateKey');
       } catch (e) {
         print('Error: No se pudo descifrar la clave privada: $e');
         return null;
