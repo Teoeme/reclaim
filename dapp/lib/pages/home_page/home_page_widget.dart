@@ -69,8 +69,17 @@ class _HomePageWidgetState extends State<HomePageWidget>
 
       print('👛 Dirección de la wallet obtenida: $walletAddress');
 
+try{
+      final account = await StarknetConfig.getAccount();
+  
+      print('👤 Cuenta obtenida: $account');
+} catch (e){
+  print('❌ Error al obtener la cuenta: $e');
+  return;
+}
+
       // Obtener el provider con la cuenta
-      final provider = await StarknetConfig.getProviderWithAccount();
+      final provider = await StarknetConfig.getProvider();
       
       setState(() {
         _ownerAddress = walletAddress;

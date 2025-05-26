@@ -1,6 +1,7 @@
 import 'package:starknet_provider/starknet_provider.dart';
 import 'package:starknet/starknet.dart' show Felt;
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 class StarknetUtils {
   /// Obtiene el selector de una función del contrato usando el ABI

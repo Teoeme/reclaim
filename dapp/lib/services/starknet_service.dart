@@ -58,11 +58,11 @@ class StarknetService {
             // cipher_secret (encryptedSecret)
             _stringToHex(encryptedSecret),
             // cid del IPFS
-            cid,
+            _stringToHex(cid),
             // unlock_timestamp del formulario
-            unlockTimestampHex,
+            unlockTimestamp,
             // access_type (string "timestamp")
-            _stringToHex('timestamp'),
+            'timestamp',
             // name del formulario
             _stringToHex(memoryName),
           ]

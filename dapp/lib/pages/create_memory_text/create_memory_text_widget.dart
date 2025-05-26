@@ -9,6 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '/backend/api_requests/api_calls.dart';
+import '/flutter_flow/custom_functions.dart';
+import '/config/starknet_config.dart';
+import 'package:starknet_provider/starknet_provider.dart';
+import 'package:starknet/starknet.dart' show Felt;
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../utils/starknet_utils.dart';
 import 'create_memory_text_model.dart';
 export 'create_memory_text_model.dart';
 
@@ -76,10 +82,180 @@ class _CreateMemoryTextWidgetState extends State<CreateMemoryTextWidget> {
       print('🔑 File Secret: ${IPFSUploaderCall.fileSecret(response.jsonBody)}');
       print('🔒 Hash Commit: ${IPFSUploaderCall.hashCommit(response.jsonBody)}');
 
-      // TODO: Manejar la respuesta exitosa
+      if (_unlockType == 'timestamp') {
+        await _handleTimestampUnlock(response);
+      } else {
+        // TODO: Manejar el caso de herederos
+      }
     } catch (e) {
       print('❌ Error uploading to IPFS: $e');
-      // TODO: Mostrar error al usuario
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Felt _stringToFelt(String str) {
+    // Para strings cortos, convertir directamente a Felt
+    try {
+      // Si el string es corto (menos de 31 caracteres), usar directamente
+      if (str.length <= 31) {
+        final bytes = utf8.encode(str);
+        final hexString = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+        return Felt.fromHexString('0x$hexString');
+      } else {
+        // Para strings largos, truncar y convertir
+        final truncated = str.substring(0, 31);
+        final bytes = utf8.encode(truncated);
+        final hexString = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+        return Felt.fromHexString('0x$hexString');
+      }
+    } catch (e) {
+      print('❌ Error en _stringToFelt: $e');
+      // Fallback: usar hash del string
+      return Felt.fromInt(str.hashCode.abs() % 1000000);
+    }
+  }
+
+  Future<void> _handleTimestampUnlock(ApiCallResponse ipfsResponse) async {
+    try {
+      // 1. Obtener la cuenta del usuario
+      final account = await StarknetConfig.getAccount();
+      
+      // 2. Obtener la wallet del usuario para la public key (ya la tenemos en account.address)
+      final publicKey = account.accountAddress.toHexString();
+
+      // 3. Cifrar el secret con la public key
+      final fileSecret = IPFSUploaderCall.fileSecret(ipfsResponse.jsonBody);
+      if (fileSecret == null) {
+        throw Exception('No se pudo obtener el file secret de IPFS');
+      }
+
+      final encryptedSecret = encryptWithRSA(fileSecret, publicKey);
+      print('🔐 Secret cifrado: $encryptedSecret');
+
+      // 4. Preparar los datos para el contrato
+      final cid = IPFSUploaderCall.ipfsCID(ipfsResponse.jsonBody);
+      final hashCommit = IPFSUploaderCall.hashCommit(ipfsResponse.jsonBody);
+      
+      if (cid == null || hashCommit == null) {
+        throw Exception('No se pudieron obtener los datos necesarios de IPFS');
+      }
+
+      final memoryName = _model.memoryNameTextController.text;
+      final unlockTimestamp = _model.datePicked?.millisecondsSinceEpoch != null 
+          ? (_model.datePicked!.millisecondsSinceEpoch ~/ 1000) 
+          : (DateTime.now().millisecondsSinceEpoch ~/ 1000);
+
+      final selector = await StarknetUtils.getFunctionSelector(
+        account.provider as JsonRpcProvider, // StarknetUtils espera un JsonRpcProvider
+        StarknetConfig.contractAddress,
+        'save_metadata',
+      );
+
+      // 5. Llamar al método save_metadata del contrato
+      print('📝 Enviando datos al contrato:');
+      print('  - Hash Commit: $hashCommit (length: ${hashCommit.length})');
+      print('  - CID: $cid (length: ${cid.length})');
+      print('  - Encrypted Secret: $encryptedSecret (length: ${encryptedSecret.length})');
+      print('  - Timestamp: $unlockTimestamp');
+      print('  - Memory Name: $memoryName (length: ${memoryName.length})');
+      
+      // Debug: probar la conversión de cada string individualmente
+      print('🔍 Testing string conversions:');
+      try {
+        final hashCommitFelt = _stringToFelt(hashCommit);
+        print('  - Hash Commit felt: $hashCommitFelt');
+      } catch (e) {
+        print('  - Error with Hash Commit: $e');
+      }
+      
+      try {
+        final encryptedSecretFelt = _stringToFelt(encryptedSecret);
+        print('  - Encrypted Secret felt: $encryptedSecretFelt');
+      } catch (e) {
+        print('  - Error with Encrypted Secret: $e');
+      }
+      
+      try {
+        final cidFelt = _stringToFelt(cid);
+        print('  - CID felt: $cidFelt');
+      } catch (e) {
+        print('  - Error with CID: $e');
+      }
+      
+      try {
+        final memoryNameFelt = _stringToFelt(memoryName);
+        print('  - Memory Name felt: $memoryNameFelt');
+      } catch (e) {
+        print('  - Error with Memory Name: $e');
+      }
+
+      // Construir la calldata
+      final calldata = List<Felt>.from([
+        // Hash Commit
+        _stringToFelt(hashCommit),
+        
+        // Encrypted Secret
+        _stringToFelt(encryptedSecret),
+        
+        // CID
+        _stringToFelt(cid),
+        
+        // Timestamp
+        Felt.fromInt(unlockTimestamp),
+        
+        // Tipo de desbloqueo (convertir 'timestamp' a número)
+        Felt.fromInt(1), // 1 para timestamp, 2 para heirs
+        
+        // Memory Name
+        _stringToFelt(memoryName),
+      ]);
+
+      print('📦 Calldata length: ${calldata.length}');
+      print('📦 Calldata preview:');
+      for (int i = 0; i < calldata.length && i < 10; i++) {
+        print('  [$i]: ${calldata[i]}');
+      }
+      if (calldata.length > 10) {
+        print('  ... and ${calldata.length - 10} more items');
+      }
+
+      // 6. Crear la lista de FunctionCall
+      final calls = [
+        FunctionCall(
+          contractAddress: Felt.fromHexString(StarknetConfig.contractAddress),
+          entryPointSelector: selector,
+          calldata: calldata,
+        ),
+      ];
+
+      // 7. Ejecutar la transacción
+      final result = await account.execute(functionCalls: calls);
+
+      print('✅ Metadata guardada exitosamente');
+      print('📝 Resultado: $result');
+
+      // // Mostrar mensaje de éxito
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   SnackBar(
+      //     content: Text('Memory created successfully! Transaction hash:'),
+      //     backgroundColor: Colors.green,
+      //   ),
+      // );
+
+      // TODO: Navegar a la siguiente pantalla o cerrar esta
+    } catch (e) {
+      print('❌ Error al guardar metadata: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving metadata: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
