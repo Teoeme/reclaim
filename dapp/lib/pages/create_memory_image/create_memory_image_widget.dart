@@ -776,10 +776,15 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                           return;
                         }
                         
-                        // Ciframos el secret con la publicKey del usuario usando RSA
+                        // Ciframos el secret con la privateKey del usuario usando AES
                         String encryptedSecret;
                         try {
-                          encryptedSecret = functions.encryptWithRSA(originalSecret, userPublicKey);
+                          // Primero desciframos la private key con AES
+                          final hashSecret = FFDevEnvironmentValues().HashSecret;
+
+                          final decryptedPrivateKey = functions.decryptWithAES(userPrivateKey, hashSecret);
+                          // Luego usamos la private key descifrada para cifrar el secret
+                          encryptedSecret = functions.encryptWithAES(originalSecret, decryptedPrivateKey);
                         } catch (e) {
                           Navigator.pop(context); // Cerrar loading
                           await showDialog(
@@ -837,7 +842,7 @@ class _CreateMemoryImageWidgetState extends State<CreateMemoryImageWidget> {
                           memoryName: _model.memoryNameTextController.text,
                           memoryDescription: _model.memoryDescriptionTextController.text,
                           unlockTimestamp: _model.datePicked!,
-                          encryptedSecret: encryptedSecret,
+                          encryptedSecret: originalSecret, //PARA el demo usamos sin encriptar
                           encryptedPrivateKey: userPrivateKey, // Esta es la clave cifrada
                           userPublicKey: userPublicKey,
                           hashCommit: hashCommit,

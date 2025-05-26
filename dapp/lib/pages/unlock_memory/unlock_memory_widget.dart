@@ -58,11 +58,10 @@ class _UnlockMemoryWidgetState extends State<UnlockMemoryWidget> {
         throw Exception('La clave privada del wallet está incompleta');
       }
 
-      // 2. Descifrar el cipher secret usando RSA
+      // 2. Descifrar el cipher secret usando AES
       final aesKey = await decryptCipherSecret(
-        cipherSecret: reclaimResult!.cipherSecret,
-        encryptedPrivateKey: userPrivateKey,
-        hashSecret: FFDevEnvironmentValues().HashSecret,
+        reclaimResult!.cipherSecret,
+        userPrivateKey,
       );
       print('✅ AES Key obtenida: $aesKey');
 
@@ -70,12 +69,9 @@ class _UnlockMemoryWidgetState extends State<UnlockMemoryWidget> {
       final encryptedContent = await getIpfsContent(reclaimResult!.cid);
       print('✅ Contenido de IPFS obtenido');
 
-      // 4. Descifrar el contenido usando la clave AES
-      final decryptedContent = decryptIpfsContent(encryptedContent, aesKey);
-      print('✅ Contenido descifrado');
-
-      // 5. Convertir el contenido descifrado a bytes (asumiendo que es una imagen)
-      final imageBytes = base64Decode(decryptedContent);
+      // 4. Descifrar el contenido usando la nueva función que devuelve bytes
+      final imageBytes = await decryptIpfsContentAsBytes(encryptedContent, aesKey);
+      print('✅ Imagen descifrada - ${imageBytes.length} bytes');
       
       setState(() {
         _decryptedImage = imageBytes;

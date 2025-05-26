@@ -8,8 +8,13 @@ import 'package:encrypt/encrypt.dart';
 import 'package:pointycastle/asymmetric/api.dart';
 import 'package:pointycastle/asymmetric/rsa.dart';
 import 'package:pointycastle/api.dart';
+import 'package:pointycastle/block/aes.dart';
+import 'package:pointycastle/block/modes/cbc.dart';
 import 'package:asn1lib/asn1lib.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
+import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/api_requests/api_calls.dart';
+import 'dart:math' as math;
 
 class StarknetUtils {
   /// Obtiene el selector de una función del contrato usando el ABI
@@ -419,33 +424,19 @@ ReclaimResult parseReclaimResult(List<Felt> flat) {
   }
 }
 
-/// Descifra el cipher secret usando RSA
-Future<String> decryptCipherSecret({
-  required String cipherSecret,
-  required String encryptedPrivateKey,
-  required String hashSecret,
-}) async {
+/// Obtiene el cipher secret (que ahora es directamente la clave original)
+Future<String> decryptCipherSecret(String cipherSecret, String encryptedPrivateKey) async {
   try {
-    print('🔐 Iniciando descifrado del cipher secret...');
-    print('🔑 Cipher secret recibido: $cipherSecret');
+    print('🔐 Obteniendo cipher secret...');
+    print('📦 Cipher secret recibido: $cipherSecret');
     
-    // 1. Obtener la clave pública que se usó para cifrar
-    final publicKey = '0x7ec0a80af0e3bbc453768e87732e7b26a6cbf02462d7ef4e38547dddb62a054';
-    print('🔑 Clave pública: $publicKey');
+    // Ahora el cipherSecret ES directamente la clave original, no necesita descifrado
+    print('✅ Cipher secret es la clave original: $cipherSecret');
     
-    // 2. Limpiar el prefijo 0x de la clave pública
-    final cleanPublicKey = publicKey.startsWith('0x') ? publicKey.substring(2) : publicKey;
-    print('🔑 Clave pública limpia: $cleanPublicKey');
-    
-    // 3. Descifrar el cipher secret usando RSA con la clave pública
-    final decrypted = functions.decryptWithRSA(cipherSecret, cleanPublicKey);
-    print('✅ Cipher secret descifrado exitosamente');
-    print('🔑 Texto descifrado: $decrypted');
-    
-    return decrypted;
+    return cipherSecret;
   } catch (e) {
-    print('❌ Error descifrando cipher secret: $e');
-    rethrow;
+    print('❌ Error al obtener cipher secret: $e');
+    throw Exception('Error al obtener el cipher secret: $e');
   }
 }
 
@@ -472,23 +463,86 @@ Future<Uint8List> getIpfsContent(String cid) async {
   }
 }
 
-/// Descifra el contenido de IPFS usando la clave AES
-String decryptIpfsContent(Uint8List encryptedContent, String aesKey) {
+/// Descifra el contenido de IPFS usando la API de Stamping y devuelve los bytes
+Future<Uint8List> decryptIpfsContentAsBytes(Uint8List encryptedContent, String aesKey) async {
   try {
-    print('🔐 Descifrando contenido de IPFS...');
+    print('🔐 Descifrando contenido de IPFS usando API de Stamping...');
+    print('🔑 AES Key recibida: $aesKey');
+    print('🔑 Longitud de la clave: ${aesKey.length} caracteres');
+    print('📦 Contenido cifrado length: ${encryptedContent.length} bytes');
     
-    // 1. Crear el objeto AES
-    final key = base64Decode(aesKey);
-    final iv = Uint8List(16); // IV de 16 bytes (ceros)
+    // El contenido de IPFS viene como string hexadecimal con prefijo 0x
+    final contentString = utf8.decode(encryptedContent);
+    print('📝 Contenido como string: ${contentString.substring(0, math.min(100, contentString.length))}...');
     
-    final encrypter = Encrypter(AES(Key(key), mode: AESMode.cbc));
-    final encrypted = Encrypted(encryptedContent);
+    // Llamar a la API de Stamping para descifrar
+    print('🌐 Llamando a API de Stamping para descifrar...');
+    final response = await AESDecryptCall.call(
+      cData: contentString,
+      secret: aesKey,
+    );
     
-    // 2. Descifrar
-    final decrypted = encrypter.decrypt(encrypted, iv: IV(iv));
-    print('✅ Contenido de IPFS descifrado exitosamente');
-    
-    return decrypted;
+    if (response.succeeded) {
+      print('✅ API de Stamping respondió exitosamente');
+      
+      // Intentar obtener base64_data primero
+      final base64Data = AESDecryptCall.base64Data(response.jsonBody);
+      if (base64Data != null && base64Data.isNotEmpty) {
+        print('📝 Base64 data obtenido: ${base64Data.substring(0, math.min(100, base64Data.length))}...');
+        
+        // Extraer solo la parte base64 del Data URL si tiene el prefijo
+        String cleanBase64;
+        if (base64Data.startsWith('data:')) {
+          // Buscar la coma que separa el prefijo del contenido base64
+          final commaIndex = base64Data.indexOf(',');
+          if (commaIndex != -1) {
+            cleanBase64 = base64Data.substring(commaIndex + 1);
+            print('📝 Base64 limpio (sin prefijo): ${cleanBase64.substring(0, math.min(100, cleanBase64.length))}...');
+          } else {
+            cleanBase64 = base64Data;
+          }
+        } else {
+          cleanBase64 = base64Data;
+        }
+        
+        // Decodificar base64 para obtener la imagen final
+        final finalImageBytes = base64Decode(cleanBase64);
+        print('✅ Imagen final length: ${finalImageBytes.length} bytes');
+        print('📦 Primeros bytes de imagen: ${finalImageBytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join()}');
+        
+        // Verificar magic bytes de imagen
+        if (finalImageBytes.length >= 8) {
+          if (finalImageBytes[0] == 0x89 && finalImageBytes[1] == 0x50 && 
+              finalImageBytes[2] == 0x4E && finalImageBytes[3] == 0x47) {
+            print('✅ Imagen PNG válida detectada');
+          } else if (finalImageBytes[0] == 0xFF && finalImageBytes[1] == 0xD8) {
+            print('✅ Imagen JPEG válida detectada');
+          } else {
+            print('⚠️ Magic bytes no reconocidos, pero continuando...');
+          }
+        }
+        
+        return finalImageBytes;
+      }
+      
+      // Fallback: usar decrypted_data si base64_data no está disponible
+      final decryptedData = AESDecryptCall.decryptedData(response.jsonBody);
+      if (decryptedData != null && decryptedData.isNotEmpty) {
+        print('📝 Usando decrypted_data como fallback: ${decryptedData.substring(0, math.min(100, decryptedData.length))}...');
+        
+        // Asumir que decrypted_data es base64 y decodificar
+        final finalImageBytes = base64Decode(decryptedData);
+        print('✅ Imagen final length: ${finalImageBytes.length} bytes');
+        
+        return finalImageBytes;
+      }
+      
+      throw Exception('No se encontró base64_data ni decrypted_data en la respuesta');
+    } else {
+      print('❌ Error en API de Stamping: ${response.statusCode}');
+      print('📝 Response body: ${response.jsonBody}');
+      throw Exception('Error en API de Stamping: ${response.statusCode}');
+    }
   } catch (e) {
     print('❌ Error descifrando contenido de IPFS: $e');
     rethrow;

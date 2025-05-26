@@ -64,7 +64,7 @@ class IPFSUploaderCall {
   "scope": "dev",
   "params": [
     {
-      "name": "<file_name>",
+      "name": "file_base64",
       "value": "${escapeStringForJson(base64File)}"
     },
     {
@@ -155,6 +155,12 @@ class AESDecryptCall {
       castToType<String>(getJsonField(
         response,
         r'''$.response.decrypted_data''',
+      ));
+  
+  static String? base64Data(dynamic response) =>
+      castToType<String>(getJsonField(
+        response,
+        r'''$.response.base64_data''',
       ));
 }
 

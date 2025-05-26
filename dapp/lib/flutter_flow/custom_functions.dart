@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:math' show Random;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -43,6 +44,7 @@ String? uploadedFileToBase64WithDetectedMime(FFUploadedFile file) {
   }
 
   final base64String = base64Encode(file.bytes!);
+  print('base64String: $base64String.substring(0, 200)...');
   return 'data:$mimeType;base64,$base64String';
 }
 
@@ -220,5 +222,184 @@ Uint8List _removePKCS7Padding(Uint8List data) {
   }
   
   return data.sublist(0, data.length - paddingLength);
+}
+
+String encryptWithAES(String plaintext, String key) {
+  try {
+    // Generar salt aleatorio
+    final salt = Uint8List(8);
+    final random = Random.secure();
+    for (var i = 0; i < salt.length; i++) {
+      salt[i] = random.nextInt(256);
+    }
+    
+    // Derivar clave e IV usando el mismo método que CryptoJS (MD5)
+    final keyAndIv = _deriveKeyAndIV(key, salt);
+    final aesKey = keyAndIv.sublist(0, 32); // 32 bytes para AES-256
+    final iv = keyAndIv.sublist(32, 48);    // 16 bytes para IV
+    
+    print('🔑 AES Key: ${base64Encode(aesKey)}');
+    print('🔑 IV: ${base64Encode(iv)}');
+    
+    // Cifrar con AES-256-CBC usando PointyCastle
+    final cipher = CBCBlockCipher(AESEngine());
+    final params = ParametersWithIV(KeyParameter(aesKey), iv);
+    cipher.init(true, params); // true = encrypt
+    
+    // Detectar si el texto plano es hexadecimal
+    Uint8List plaintextBytes;
+    final isHex = RegExp(r'^[0-9a-fA-F]+$').hasMatch(plaintext) && plaintext.length % 2 == 0;
+    
+    if (isHex) {
+      // Es hexadecimal, convertir a bytes
+      plaintextBytes = Uint8List.fromList(
+        List.generate(plaintext.length ~/ 2, (i) => 
+          int.parse(plaintext.substring(i * 2, i * 2 + 2), radix: 16)
+        )
+      );
+      print('📝 Texto plano (hex): $plaintext');
+    } else {
+      // Es texto normal, usar UTF-8
+      plaintextBytes = utf8.encode(plaintext);
+      print('📝 Texto plano (utf8): $plaintext');
+    }
+    
+    print('📝 Texto plano (bytes): ${base64Encode(plaintextBytes)}');
+    
+    // Agregar padding PKCS7
+    final paddedData = _addPKCS7Padding(plaintextBytes);
+    print('📝 Texto con padding: ${base64Encode(paddedData)}');
+    
+    // Cifrar
+    final encryptedBytes = Uint8List(paddedData.length);
+    var offset = 0;
+    while (offset < paddedData.length) {
+      offset += cipher.processBlock(paddedData, offset, encryptedBytes, offset);
+    }
+    
+    print('🔒 Texto cifrado: ${base64Encode(encryptedBytes)}');
+    
+    // Combinar "Salted__" + salt + texto cifrado
+    final result = Uint8List(8 + salt.length + encryptedBytes.length);
+    result.setAll(0, utf8.encode('Salted__'));
+    result.setAll(8, salt);
+    result.setAll(16, encryptedBytes);
+    
+    // Convertir a base64
+    final finalResult = base64Encode(result);
+    print('🎯 Resultado final: $finalResult');
+    
+    return finalResult;
+  } catch (e) {
+    print('❌ Error en encryptWithAES: $e');
+    throw Exception('Error de cifrado AES: $e');
+  }
+}
+
+// Función auxiliar para agregar padding PKCS7
+Uint8List _addPKCS7Padding(List<int> data) {
+  final blockSize = 16; // Tamaño de bloque AES
+  final paddingLength = blockSize - (data.length % blockSize);
+  final paddedData = Uint8List(data.length + paddingLength);
+  paddedData.setAll(0, data);
+  for (var i = data.length; i < paddedData.length; i++) {
+    paddedData[i] = paddingLength;
+  }
+  return paddedData;
+}
+
+String decryptCipherSecretWithAES(String encryptedText, String key) {
+  try {
+    // Decodificar el texto cifrado de base64
+    final encryptedData = base64.decode(encryptedText);
+    
+    // Verificar que comience con "Salted__" (formato CryptoJS)
+    final saltedPrefix = utf8.encode('Salted__');
+    if (encryptedData.length < 16 || 
+        !ListEquality().equals(encryptedData.sublist(0, 8), saltedPrefix)) {
+      throw Exception('Formato de datos cifrados inválido - no es formato CryptoJS');
+    }
+    
+    // Extraer el salt (bytes 8-16)
+    final salt = encryptedData.sublist(8, 16);  
+    
+    // Extraer el texto cifrado real (después del salt)
+    final cipherText = encryptedData.sublist(16);
+    
+    // Derivar clave e IV usando el mismo método que CryptoJS (MD5)
+    final keyAndIv = _deriveKeyAndIV(key, salt);
+    final aesKey = keyAndIv.sublist(0, 32); // 32 bytes para AES-256
+    final iv = keyAndIv.sublist(32, 48);    // 16 bytes para IV
+    
+    // Descifrar con AES-256-CBC usando PointyCastle directamente
+    final cipher = CBCBlockCipher(AESEngine());
+    final params = ParametersWithIV(KeyParameter(aesKey), iv);
+    cipher.init(false, params); // false = decrypt
+    
+    // Descifrar
+    final decryptedBytes = Uint8List(cipherText.length);
+    var offset = 0;
+    while (offset < cipherText.length) {
+      offset += cipher.processBlock(cipherText, offset, decryptedBytes, offset);
+    }
+    
+    // Remover padding PKCS7
+    final unpaddedBytes = _removePKCS7Padding(decryptedBytes);
+    
+    // Convertir directamente a hexadecimal (para cipher secrets)
+    final hexString = unpaddedBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return hexString;
+  } catch (e) {
+    print('❌ Error en decryptCipherSecretWithAES: $e');
+    throw Exception('Error de descifrado AES: $e');
+  }
+}
+
+String decryptSecretWithAES(String encryptedText, String key) {
+  try {
+    // Decodificar el texto cifrado de base64
+    final encryptedData = base64.decode(encryptedText);
+    
+    // Verificar que comience con "Salted__" (formato CryptoJS)
+    final saltedPrefix = utf8.encode('Salted__');
+    if (encryptedData.length < 16 || 
+        !ListEquality().equals(encryptedData.sublist(0, 8), saltedPrefix)) {
+      throw Exception('Formato de datos cifrados inválido - no es formato CryptoJS');
+    }
+    
+    // Extraer el salt (bytes 8-16)
+    final salt = encryptedData.sublist(8, 16);  
+    
+    // Extraer el texto cifrado real (después del salt)
+    final cipherText = encryptedData.sublist(16);
+    
+    // Derivar clave e IV usando el mismo método que CryptoJS (MD5)
+    final keyAndIv = _deriveKeyAndIV(key, salt);
+    final aesKey = keyAndIv.sublist(0, 32); // 32 bytes para AES-256
+    final iv = keyAndIv.sublist(32, 48);    // 16 bytes para IV
+    
+    // Descifrar con AES-256-CBC usando PointyCastle directamente
+    final cipher = CBCBlockCipher(AESEngine());
+    final params = ParametersWithIV(KeyParameter(aesKey), iv);
+    cipher.init(false, params); // false = decrypt
+    
+    // Descifrar
+    final decryptedBytes = Uint8List(cipherText.length);
+    var offset = 0;
+    while (offset < cipherText.length) {
+      offset += cipher.processBlock(cipherText, offset, decryptedBytes, offset);
+    }
+    
+    // Remover padding PKCS7
+    final unpaddedBytes = _removePKCS7Padding(decryptedBytes);
+    
+    // Convertir a string UTF-8 (devolver el texto original sin modificar)
+    final decryptedString = utf8.decode(unpaddedBytes);
+    
+    return decryptedString;
+  } catch (e) {
+    print('❌ Error en decryptSecretWithAES: $e');
+    throw Exception('Error de descifrado AES: $e');
+  }
 }
 
